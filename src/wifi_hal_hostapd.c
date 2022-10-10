@@ -77,6 +77,30 @@ void wifi_authenticator_run()
     eloop_run();
 }
 
+static enum nl80211_iftype wpa_driver_nl80211_if_type(
+    enum wpa_driver_if_type type)
+{
+    switch (type) {
+    case WPA_IF_STATION:
+        return NL80211_IFTYPE_STATION;
+    case WPA_IF_P2P_CLIENT:
+    case WPA_IF_P2P_GROUP:
+        return NL80211_IFTYPE_P2P_CLIENT;
+    case WPA_IF_AP_VLAN:
+        return NL80211_IFTYPE_AP_VLAN;
+    case WPA_IF_AP_BSS:
+        return NL80211_IFTYPE_AP;
+    case WPA_IF_P2P_GO:
+        return NL80211_IFTYPE_P2P_GO;
+    case WPA_IF_P2P_DEVICE:
+        return NL80211_IFTYPE_P2P_DEVICE;
+    case WPA_IF_MESH:
+        return NL80211_IFTYPE_MESH_POINT;
+    default:
+        return -1;
+    }
+}
+
 void init_radius_config(wifi_interface_info_t *interface)
 {
     if (!interface->vap_initialized) {
@@ -206,11 +230,13 @@ void init_hostap_bss(wifi_interface_info_t *interface)
 #endif /* CONFIG_IEEE80211R_AP */
 
     conf->radius_das_time_window = 300;
+
 #if HOSTAPD_VERSION >= 210 //2.10
     conf->anti_clogging_threshold = 5;
 #else
     conf->sae_anti_clogging_threshold = 5;
 #endif
+
     conf->sae_sync = 5;
 
     conf->gas_frag_limit = 1400;
@@ -800,6 +826,9 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     conf->radio_measurements[0] |=  (WLAN_RRM_CAPS_BEACON_REPORT_PASSIVE | WLAN_RRM_CAPS_BEACON_REPORT_ACTIVE | WLAN_RRM_CAPS_BEACON_REPORT_TABLE);
     if(vap->u.bss_info.nbrReportActivated) {
         conf->radio_measurements[0] |= WLAN_RRM_CAPS_NEIGHBOR_REPORT;
+#ifdef CMXB7_PORT
+        conf->radio_measurements[0] |= WLAN_RRM_CAPS_LINK_MEASUREMENT; 
+#endif
     }
     else {
          conf->radio_measurements[0] &= ~(WLAN_RRM_CAPS_NEIGHBOR_REPORT);
@@ -912,6 +941,72 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     return RETURN_OK;
 }
 
+int init_hostap_hw_features(wifi_interface_info_t *interface)
+{
+    struct hostapd_iface   *iface;
+    wifi_vap_info_t        *vap;
+    wifi_radio_info_t      *radio;
+    enum nl80211_iftype     nlmode;
+
+    if (!interface) {
+        return RETURN_ERR;
+    }
+
+    vap = &interface->vap_info;
+    radio = get_radio_by_rdk_index(vap->radio_index);
+    iface = &interface->u.ap.iface;
+    iface->num_bss = 1;
+    iface->bss = interface->u.ap.hapds;
+    interface->u.ap.hapds[0] = &interface->u.ap.hapd;
+
+    hostapd_get_hw_features(iface);
+
+    if (iface->num_hw_features < 1) {
+        return RETURN_ERR;
+    }
+
+    nlmode = wpa_driver_nl80211_if_type(WPA_IF_AP_BSS);
+
+    /* Replace the default value if a per-interface type value exists */
+    for (unsigned int i = 0; i < radio->driver_data.num_iface_ext_capa; i++) {
+        if (nlmode == radio->driver_data.iface_ext_capa[i].iftype) {
+            iface->extended_capa = radio->driver_data.iface_ext_capa[i].ext_capa;
+            iface->extended_capa_mask = radio->driver_data.iface_ext_capa[i].ext_capa_mask;
+            iface->extended_capa_len = radio->driver_data.iface_ext_capa[i].ext_capa_len;
+            break;
+        }
+    }
+
+    return RETURN_OK;
+}
+
+int update_hostap_dtim_period(wifi_radio_info_t *radio)
+{
+    wifi_interface_info_t *interface = NULL;
+    struct hostapd_bss_config *conf = NULL;
+
+    if (radio == NULL) {
+        wifi_hal_error_print("%s:%d:wifi_radio_info is NULL\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    interface = hash_map_get_first(radio->interface_map);
+    if (interface == NULL ) {
+        wifi_hal_error_print("%s:%d: Interface map is empty for radio\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    while (interface != NULL) {
+        if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+            conf = &interface->u.ap.conf;
+            conf->dtim_period = radio->oper_param.dtimPeriod;
+        }
+        interface = hash_map_get_next(radio->interface_map, interface);
+    }
+
+    return RETURN_OK;
+}
+
 int update_hostap_iface(wifi_interface_info_t *interface)
 {
     struct hostapd_iface   *iface;
@@ -967,10 +1062,16 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         return RETURN_ERR;
     }
 
+#ifdef CMXB7_PORT
+    mode = &radio->hw_modes[band];
+    iface->current_rates = radio->rate_data[band];
+    iface->basic_rates = radio->basic_rates[band];
+#else
     iface->current_mode = &radio->hw_modes[band];
     iface->current_rates = radio->rate_data[band];
     iface->basic_rates = radio->basic_rates[band];
     mode = iface->current_mode;
+#endif
     wifi_hal_info_print("%s:%d: Interface: %s band: %d mode:%p has %d rates\n", __func__, __LINE__, 
         interface->name, band, mode, mode->num_rates);
 
@@ -1022,10 +1123,45 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         interface->u.ap.iface_initialized = true;
     }
 
+#ifdef CMXB7_PORT
+    iface->drv_flags = radio->driver_data.capa.flags;
+    iface->drv_flags |= WPA_DRIVER_FLAGS_INACTIVITY_TIMER;
+    iface->drv_flags |= WPA_DRIVER_FLAGS_EAPOL_TX_STATUS;
+    iface->drv_flags |= WPA_DRIVER_FLAGS_AP_MLME;
+    iface->drv_flags |= WPA_DRIVER_FLAGS_AP_CSA;
+    // XXX: Such ability should be retrieved during NL80211_CMD_GET_WIPHY
+    if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_PROBE_RESP_OFFLOAD) {
+        iface->drv_flags |= WPA_DRIVER_FLAGS_PROBE_RESP_OFFLOAD;
+    }
+
+    iface->current_mode = NULL;
+    for (int i = 0; i < iface->num_hw_features; i++) {
+        struct hostapd_hw_modes *mode = &iface->hw_features[i];
+
+        if (mode->mode == iface->conf->hw_mode) {
+            iface->current_mode = mode;
+            break;
+        }
+    }
+
+    iface->conf->ht_capab = iface->current_mode->ht_capab;
+    iface->conf->vht_capab = iface->current_mode->vht_capab;
+
+    /* By default, use the per-radio values */
+    iface->extended_capa = radio->driver_data.extended_capa;
+    iface->extended_capa_mask = radio->driver_data.extended_capa_mask;
+    iface->extended_capa_len = radio->driver_data.extended_capa_len;
+#else
     iface->drv_flags = WPA_DRIVER_FLAGS_INACTIVITY_TIMER;
     iface->drv_flags |= WPA_DRIVER_FLAGS_EAPOL_TX_STATUS;
     iface->drv_flags |= WPA_DRIVER_FLAGS_AP_MLME;
     iface->drv_flags |= WPA_DRIVER_FLAGS_AP_CSA;
+    // XXX: Such ability should be retrieved during NL80211_CMD_GET_WIPHY
+    if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_PROBE_RESP_OFFLOAD) {
+        iface->drv_flags |= WPA_DRIVER_FLAGS_PROBE_RESP_OFFLOAD;
+    }
+#endif
+
     return RETURN_OK;
 }
 
@@ -1101,8 +1237,9 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     iconf->tx_queue[2] = txq_be;
     iconf->tx_queue[3] = txq_bk;
 
+#ifndef CMXB7_PORT
     iconf->ht_capab = HT_CAP_INFO_SMPS_DISABLED;
-
+#endif
     iconf->ap_table_max_size = 255;
     iconf->ap_table_expiration_time = 60;
     iconf->track_sta_max_age = 180;
@@ -1215,6 +1352,7 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
         bandwidth = CHANWIDTH_80P80MHZ;
         break;
     }
+
 #ifdef CONFIG_IEEE80211AX       
     if (iconf->ieee80211ax == 1) {
         iconf->he_oper_chwidth = bandwidth;
@@ -1304,6 +1442,7 @@ static void wpa_sm_sta_deauthenticate(void *ctx, u16 reason_code)
 {
     wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__); 
 }
+
 #if HOSTAPD_VERSION >= 210 //2.10
 static int wpa_sm_sta_set_key(void *ctx, enum wpa_alg alg,
                const u8 *addr, int key_idx, int set_tx,
@@ -1398,6 +1537,21 @@ static int wpa_sm_sta_ether_send(void *ctx, const u8 *dest, u16 proto, const u8 
     struct ieee8023_hdr *eth_hdr;
 
     interface = (wifi_interface_info_t *)ctx;
+
+    if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_CONTROL_PORT_FRAME) {
+#if HOSTAPD_VERSION >= 210 //2.10
+        int encrypt;
+        mac_addr_str_t mac_str;
+        encrypt = interface->u.sta.wpa_sm && wpa_sm_has_ptk_installed(interface->u.sta.wpa_sm);
+        wifi_hal_info_print("%s:%d: Sending eapol via control port to sta:%s on interface:%s encrypt:%d\n", __func__, __LINE__,
+            to_mac_str(dest, mac_str), interface->name, encrypt);
+        if ((ret = nl80211_tx_control_port(interface, dest, ETH_P_EAPOL, buf, len, !encrypt))) {
+            wifi_hal_error_print("%s:%d: eapol send failed\n", __func__, __LINE__);
+            return -1;
+        }
+        return 0;
+#endif // HOSTAPD_VERSION >= 210     
+    }
         
     memset(&ll, 0, sizeof(ll));
     //ll.sll_family = AF_PACKET;
@@ -1492,6 +1646,7 @@ static int wpa_sm_sta_key_mgmt_set_pmk(void *ctx, const u8 *pmk,
     wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
     return 0;
 }
+
 #if HOSTAPD_VERSION >= 210 //2.10
 static int wpa_sm_sta_add_pmkid(void *ctx, void *network_ctx, const u8 *bssid,
 					const u8 *pmkid, const u8 *fils_cache_id,

@@ -63,6 +63,25 @@ wifi_interface_name_idex_map_t interface_index_map[] = {
     {1, 1,  "wl1",     "brlan1",    0,    15,     "mesh_sta_5g"},
 #endif
 
+#ifdef CMXB7_PORT // for Intel based platforms  
+    {1, 0,  "wlan0.0",   "brlan0",  100, 0,      "private_ssid_2g"},
+    {0, 1,  "wlan2.0",   "brlan0",  100, 1,      "private_ssid_5g"},
+    {1, 0,  "wlan0.1",   "brlan1",  101, 2,      "iot_ssid_2g"},
+    {0, 1,  "wlan2.1",   "brlan1",  101, 3,      "iot_ssid_5g"},
+    {1, 0,  "wlan0.2",   "brlan2",  102, 4,      "hotspot_open_2g"},
+    {0, 1,  "wlan2.2",   "brlan3",  103, 5,      "hotspot_open_5g"},
+    {1, 0,  "wlan0.3",   "br106",   106, 6,      "lnf_psk_2g"},
+    {0, 1,  "wlan2.3",   "br106",   106, 7,      "lnf_psk_5g"},
+    {1, 0,  "wlan0.4",   "brlan4",  104, 8,      "hotspot_secure_2g"},
+    {0, 1,  "wlan2.4",   "brlan5",  105, 9,      "hotspot_secure_5g"},
+    {1, 0,  "wlan0.5",   "br106",   106, 10,     "lnf_radius_2g"},
+    {0, 1,  "wlan2.5",   "br106",   106, 11,     "lnf_radius_5g"},
+    {1, 0,  "wlan0.6",   "brlan112",112, 12,     "mesh_backhaul_2g"},
+    {0, 1,  "wlan2.6",   "brlan113",113, 13,     "mesh_backhaul_5g"},
+    {1, 0,  "wlan1",     "brlan1",    0, 14,     "mesh_sta_2g"},
+    {0, 1,  "wlan3",     "brlan1",    0, 15,     "mesh_sta_5g"},   
+#endif
+
 #ifdef XLE_PORT // for Broadcom XLE
 
 #ifdef XLE_3_RADIO_SUPPORT
@@ -168,6 +187,11 @@ static radio_interface_mapping_t l_radio_interface_map[] = {
     { 2, 2, "radio3", "wl2"},
 #endif
 
+#ifdef CMXB7_PORT // for Intel based platforms
+    { 1, 0, "radio1", "wlan0"},
+    { 0, 1, "radio2", "wlan2"},
+#endif
+
 };
 
 const wifi_driver_info_t  driver_info = {
@@ -179,13 +203,18 @@ const wifi_driver_info_t  driver_info = {
     platform_post_init,
     platform_set_radio,
     platform_set_radio_pre_init,
+    platform_pre_create_vap,
     platform_create_vap,
     platform_get_ssid_default,
     platform_get_keypassphrase_default,
     platform_get_radius_key_default,
     platform_get_wps_pin_default,
     platform_get_country_code_default,
-    platform_wps_event
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
 #endif
 
 #ifdef TCXB7_PORT // for Broadcom based platforms
@@ -196,13 +225,18 @@ const wifi_driver_info_t  driver_info = {
     platform_post_init,
     platform_set_radio,
     platform_set_radio_pre_init,
+    platform_pre_create_vap,
     platform_create_vap,
     platform_get_ssid_default,
     platform_get_keypassphrase_default,
     platform_get_radius_key_default,
     platform_get_wps_pin_default,
     platform_get_country_code_default,
-    platform_wps_event
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
 #endif
 
 #ifdef TCXB8_PORT // for Broadcom based platforms
@@ -213,13 +247,40 @@ const wifi_driver_info_t  driver_info = {
     platform_post_init,
     platform_set_radio,
     platform_set_radio_pre_init,
+    platform_pre_create_vap,
     platform_create_vap,
     platform_get_ssid_default,
     platform_get_keypassphrase_default,
     platform_get_radius_key_default,
     platform_get_wps_pin_default,
     platform_get_country_code_default,
-    platform_wps_event
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
+#endif
+
+#ifdef CMXB7_PORT
+    "cmxb7",
+    "mtlk",
+    {"Xfinity Wireless Gateway","Commscope","XB7","TG4482PC2","Model Description","Model URL","267","WPS Access Point","Manufacturer URL"},
+    platform_pre_init,
+    platform_post_init,
+    platform_set_radio,
+    platform_set_radio_pre_init,
+    platform_pre_create_vap,
+    platform_create_vap,
+    platform_get_ssid_default,
+    platform_get_keypassphrase_default,
+    platform_get_radius_key_default,
+    platform_get_wps_pin_default,
+    platform_get_country_code_default,
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
 #endif
 
 #ifdef XLE_PORT // for Broadcom XLE
@@ -230,13 +291,18 @@ const wifi_driver_info_t  driver_info = {
     platform_post_init,
     platform_set_radio,
     platform_set_radio_pre_init,
+    platform_pre_create_vap,
     platform_create_vap,
     platform_get_ssid_default,
     platform_get_keypassphrase_default,
     platform_get_radius_key_default,
     platform_get_wps_pin_default,
     platform_get_country_code_default,
-    platform_wps_event
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
 #endif
 
 #ifdef SKYSR213_PORT // for Broadcom HUB6
@@ -247,13 +313,18 @@ const wifi_driver_info_t  driver_info = {
     platform_post_init,
     platform_set_radio,
     platform_set_radio_pre_init,
+    platform_pre_create_vap,
     platform_create_vap,
     platform_get_ssid_default,
     platform_get_keypassphrase_default,
     platform_get_radius_key_default,
     platform_get_wps_pin_default,
     platform_get_country_code_default,
-    platform_wps_event
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done
 #endif
     
 };
@@ -893,7 +964,7 @@ int set_interface_properties(unsigned int phy_index, wifi_interface_info_t *inte
 
         if ((strcmp(interface->name, radio_map->interface_name) == 0) &&
             (phy_index == radio_map->phy_index)) {
-            vap->radio_index = map->rdk_radio_index;
+            vap->radio_index = radio_map->radio_index;
             vap->vap_index = -1;
             return 0;
         }
@@ -2107,6 +2178,7 @@ platform_keypassphrase_default_t get_platform_keypassphrase_default_fn()
 {
    return driver_info.platform_keypassphrase_default_fn;
 }
+
 platform_radius_key_default_t get_platform_radius_key_default_fn()
 {
    return driver_info.platform_radius_key_default_fn;
@@ -2132,6 +2204,11 @@ platform_set_radio_params_t	get_platform_set_radio_fn()
     return driver_info.platform_set_radio_fn;
 }
 
+platform_pre_create_vap_t   get_platform_pre_create_vap_fn()
+{
+    return driver_info.platform_pre_create_vap_fn;
+}
+
 platform_create_vap_t	get_platform_create_vap_fn()
 {
     return driver_info.platform_create_vap_fn;
@@ -2140,6 +2217,26 @@ platform_create_vap_t	get_platform_create_vap_fn()
 platform_set_radio_pre_init_t get_platform_set_radio_pre_init_fn()
 {
     return driver_info.platform_set_radio_pre_init_fn;
+}
+
+platform_flags_init_t   get_platform_flags_init_fn()
+{
+    return driver_info.platform_flags_init_fn;
+}
+
+platform_get_aid_t get_platform_get_aid_fn()
+{
+    return driver_info.platform_get_aid_fn;
+}
+
+platform_free_aid_t get_platform_free_aid_fn()
+{
+    return driver_info.platform_free_aid_fn;
+}
+
+platform_sync_done_t get_platform_sync_done_fn()
+{
+    return driver_info.platform_sync_done_fn;
 }
 
 bool lsmod_by_name(const char *name)

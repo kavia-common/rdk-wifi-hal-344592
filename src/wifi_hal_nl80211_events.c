@@ -199,7 +199,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
 #ifdef WIFI_HAL_VERSION_3_PHASE2
             callbacks->mgmt_frame_rx_callback(vap->vap_index, &mgmt_frame);
 #else
-#if defined(RDK_ONEWIFI) && defined(TCXB7_PORT)
+#if defined(RDK_ONEWIFI) && (defined(TCXB7_PORT) || defined(CMXB7_PORT) || defined(TCXB8_PORT))
             callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)event.tx_status.data,
                 event.tx_status.data_len, mgmt_type, dir, sig_dbm);
 #else

@@ -159,8 +159,9 @@ INT wifi_hal_init()
     unsigned int i;
     wifi_radio_info_t *radio;
     char *drv_name;
+    platform_flags_init_t flags_init_fn;
     wifi_hal_info_print("%s:%d: start\n", __func__, __LINE__);
-
+    
     if ((drv_name = get_wifi_drv_name()) == NULL) {
         wifi_hal_error_print("%s:%d: driver not found, get drv name failed\n", __func__, __LINE__);
         return RETURN_ERR;
@@ -170,6 +171,9 @@ INT wifi_hal_init()
     while (lsmod_by_name(drv_name) == false) {
         usleep(5000);
     }
+
+    pthread_mutex_init(&g_wifi_hal.nl_create_socket_lock, NULL);
+    g_wifi_hal.netlink_socket_map = hash_map_create();
 
     if (init_nl80211() != 0) {
         return RETURN_ERR;
@@ -209,6 +213,24 @@ INT wifi_hal_init()
 
     if (update_channel_flags() != 0) {
         return RETURN_ERR;
+    }
+
+#ifdef CMXB7_PORT
+    for (i = 0; i < g_wifi_hal.num_radios; i++) {
+        wifi_interface_info_t *interface;
+        radio = get_radio_by_rdk_index(i);
+        interface = hash_map_get_first(radio->interface_map);
+        while (interface != NULL) {
+            update_hostap_data(interface);
+            init_hostap_hw_features(interface);
+            interface = hash_map_get_next(radio->interface_map, interface);
+        }
+    }
+#endif
+
+    if ((flags_init_fn = get_platform_flags_init_fn()) != NULL) {
+        wifi_hal_dbg_print("%s:%d: set platform specific flags\n", __func__, __LINE__);
+        flags_init_fn((int *)&g_wifi_hal.platform_flags);
     }
 
     wifi_hal_info_print("%s:%d: done\n", __func__, __LINE__);
@@ -441,6 +463,11 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
         }
     }
 
+    if (radio->configured && radio->oper_param.enable && (radio->oper_param.dtimPeriod != operationParam->dtimPeriod)) {
+        radio->oper_param.dtimPeriod = operationParam->dtimPeriod;
+        update_hostap_dtim_period(radio);
+    }
+
     if (radio->oper_param.countryCode != operationParam->countryCode) {
         wifi_hal_dbg_print("%s:%d:Set country code:%d\n", __func__, __LINE__, operationParam->countryCode);
         nl80211_set_regulatory_domain(operationParam->countryCode);
@@ -630,9 +657,14 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     wifi_radio_info_t *radio;
     wifi_interface_info_t *interface;
     wifi_vap_info_t *vap;
+    platform_pre_create_vap_t pre_set_vap_params_fn;
     platform_create_vap_t set_vap_params_fn;
     unsigned int i;
+#ifdef CMXB7_PORT
+    int set_acl = 0;
+#else
     int filtermode;
+#endif
     //bssid_t null_mac = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
     RADIO_INDEX_ASSERT(index);
@@ -643,6 +675,11 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     if (radio == NULL) {
         wifi_hal_error_print("%s:%d:Could not find radio index:%d\n", __func__, __LINE__, index);
         return RETURN_ERR;
+    }
+
+    if ((pre_set_vap_params_fn = get_platform_pre_create_vap_fn()) != NULL) {
+        wifi_hal_info_print("%s:%d: set vap params to nvram\n", __func__, __LINE__);
+        pre_set_vap_params_fn(index, map);
     }
 
     // now create vaps on the interfaces
@@ -660,6 +697,12 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 continue;
             }
         }
+#ifdef CMXB7_PORT
+        if (interface->vap_info.u.bss_info.mac_filter_mode != vap->u.bss_info.mac_filter_mode ||
+            interface->vap_info.u.bss_info.mac_filter_enable != vap->u.bss_info.mac_filter_enable) {
+            set_acl = 1;
+        }
+#endif
 
         wifi_hal_info_print("%s:%d: vap_index:%d name:%s\r\n",__func__, __LINE__, vap->vap_index, interface->name);
 
@@ -757,6 +800,11 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 wifi_drv_set_operstate(interface, 1);
             }
         }
+#ifdef CMXB7_PORT
+        if (set_acl == 1) {
+            nl80211_set_acl(interface);
+        }
+#else
         //Call vendor HAL
         if (vap->vap_mode == wifi_vap_mode_ap) {
             if (vap->u.bss_info.mac_filter_enable == TRUE) {
@@ -779,6 +827,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             }
             wifi_hal_info_print("mac filter mode:%d apIndex:%d\n", filtermode, vap->vap_index);
         }
+#endif
     }
 
     if ((set_vap_params_fn = get_platform_create_vap_fn()) != NULL) {
@@ -834,17 +883,19 @@ INT wifi_hal_getRadioVapInfoMap(wifi_radio_index_t index, wifi_vap_info_map_t *m
     }
 
     while (interface != NULL) {
-        memcpy(&map->vap_array[itr], &interface->vap_info, sizeof(wifi_vap_info_t));
-
-        if (strncmp((char *)map->vap_array[itr].vap_name, "mesh_sta", strlen("mesh_sta")) != 0) {
-            memcpy(map->vap_array[itr].u.bss_info.bssid, interface->mac, sizeof(map->vap_array[itr].u.bss_info.bssid));
-        } else {
-            memcpy(map->vap_array[itr].u.sta_info.mac, interface->mac, sizeof(map->vap_array[itr].u.sta_info.mac));
+        // on CMXB7 platform radio interfaces have vap_index -1
+        // therefore check for interface vap_index
+        // and don't add radio interfaces to vap map
+        if ((int)interface->vap_info.vap_index >= 0){
+            memcpy(&map->vap_array[itr], &interface->vap_info, sizeof(wifi_vap_info_t));
+            if (strncmp((char *)map->vap_array[itr].vap_name, "mesh_sta", strlen("mesh_sta")) != 0) {
+                memcpy(map->vap_array[itr].u.bss_info.bssid, interface->mac, sizeof(map->vap_array[itr].u.bss_info.bssid));
+            } else {
+                memcpy(map->vap_array[itr].u.sta_info.mac, interface->mac, sizeof(map->vap_array[itr].u.sta_info.mac));
+            }
+            itr++;
         }
-
         interface = hash_map_get_next(radio->interface_map, interface);
-
-        itr++;
     }
 
     map->num_vaps = itr;
@@ -951,6 +1002,244 @@ static int chann_to_freq(unsigned char chan)
         chan);
 
     return 0;
+}
+
+#ifdef WIFI_HAL_VERSION_3_PHASE2
+INT wifi_hal_addApAclDevice(INT apIndex, mac_address_t DeviceMacAddress)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    acl_map_t *acl_map = NULL;
+    mac_addr_str_t sta_mac_str;
+    char *key = NULL;
+
+    interface = get_interface_by_vap_index(apIndex);
+    vap = &interface->vap_info;
+
+    key = to_mac_str(sta_mac, sta_mac_str);
+    
+    wifi_hal_dbg_print("%s:%d: Interface: %s MAC: %s\n", __func__, __LINE__, interface->name, key);
+
+    if (vap->vap_mode != wifi_vap_mode_ap) {
+        wifi_hal_dbg_print("%s:%d: Not possible to add MAC ACL for STA device\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    if (interface->acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+    acl_map = hash_map_get(interface->acl_map, key);
+
+    if (acl_map != NULL) {
+        wifi_hal_dbg_print("%s:%d: MAC %s already present in acl list\n", __func__, __LINE__, key);
+        return RETURN_ERR;
+    }
+
+    acl_map = (acl_map_t *)malloc(sizeof(acl_map_t));
+
+    memcpy(acl_map->mac_addr_str, key, sizeof(mac_addr_str_t));
+    memcpy(acl_map->mac_addr, DeviceMacAddress, sizeof(mac_address_t));
+
+    hash_map_put(interface->acl_map, strdup(key), acl_map);
+
+    if (nl80211_set_acl(interface) != 0) {
+        hash_map_remove(interface->acl_map, key);
+        if (acl_map != NULL) {
+            free(acl_map);
+        }
+        return -1;
+    }
+
+    return 0;
+}
+#else
+INT wifi_hal_addApAclDevice(INT apIndex, CHAR *DeviceMacAddress)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    acl_map_t *acl_map = NULL;
+
+    interface = get_interface_by_vap_index(apIndex);
+    vap = &interface->vap_info;
+    
+    wifi_hal_dbg_print("%s:%d: Interface: %s MAC: %s\n",  __func__, __LINE__, interface->name, DeviceMacAddress);
+
+    if (vap->vap_mode != wifi_vap_mode_ap) {
+        wifi_hal_dbg_print("%s:%d: Not possible to add MAC ACL for STA device\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    if (interface->acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+    acl_map = hash_map_get(interface->acl_map, DeviceMacAddress);
+
+    if (acl_map != NULL) {
+        wifi_hal_dbg_print("%s:%d: MAC %s already present in acl list\n", __func__, __LINE__, DeviceMacAddress);
+        return RETURN_ERR;
+    }
+
+    acl_map = (acl_map_t *)malloc(sizeof(acl_map_t));
+
+    memcpy(acl_map->mac_addr_str, DeviceMacAddress, sizeof(mac_addr_str_t));
+    to_mac_bytes(acl_map->mac_addr_str, acl_map->mac_addr);
+
+    hash_map_put(interface->acl_map, strdup(DeviceMacAddress), acl_map);
+
+    if (nl80211_set_acl(interface) != 0) {
+        hash_map_remove(interface->acl_map, DeviceMacAddress);
+        if (acl_map != NULL) {
+            free(acl_map);
+        }
+        return -1;
+    }
+
+    return 0;
+}
+#endif
+
+#ifdef WIFI_HAL_VERSION_3_PHASE2
+INT wifi_hal_delApAclDevice(INT apIndex, mac_address_t DeviceMacAddress)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    acl_map_t *acl_map = NULL;
+    mac_addr_str_t sta_mac_str;
+    char *key = NULL;
+
+    interface = get_interface_by_vap_index(apIndex);
+    vap = &interface->vap_info;
+
+    key = to_mac_str(sta_mac, sta_mac_str);
+    
+    wifi_hal_dbg_print("%s:%d: Interface: %s MAC: %s\n", __func__, __LINE__, interface->name, key);
+
+    if (vap->vap_mode != wifi_vap_mode_ap) {
+        wifi_hal_dbg_print("%s:%d: Not possible to del MAC ACL for STA device\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    if (interface->acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+    acl_map = hash_map_get(interface->acl_map, key);
+
+    if (acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: MAC %s is not present in acl list\n", __func__, __LINE__, key);
+        return RETURN_ERR;
+    }
+
+    hash_map_remove(interface->acl_map, key);
+    if (acl_map != NULL) {
+        free(acl_map);
+    }
+
+    if (nl80211_set_acl(interface) != 0) {
+        acl_map = (acl_map_t *)malloc(sizeof(acl_map_t));
+
+        memcpy(acl_map->mac_addr_str, key, sizeof(mac_addr_str_t));
+        memcpy(acl_map->mac_addr, DeviceMacAddress, sizeof(mac_addr_str_t));
+
+        hash_map_put(interface->acl_map, strdup(key), acl_map);
+
+        return -1;
+    }
+
+    return 0;
+}
+#else
+INT wifi_hal_delApAclDevice(INT apIndex, CHAR *DeviceMacAddress)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    acl_map_t *acl_map = NULL;
+
+    interface = get_interface_by_vap_index(apIndex);
+    vap = &interface->vap_info;
+    
+    wifi_hal_dbg_print("%s:%d: Interface: %s MAC: %s\n", __func__, __LINE__, interface->name, DeviceMacAddress);
+
+    if (vap->vap_mode != wifi_vap_mode_ap) {
+        wifi_hal_dbg_print("%s:%d: Not possible to del MAC ACL for STA device\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    if (interface->acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+    acl_map = hash_map_get(interface->acl_map, DeviceMacAddress);
+
+    if (acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: MAC %s is not present in acl list\n", __func__, __LINE__, DeviceMacAddress);
+        return RETURN_ERR;
+    }
+
+    hash_map_remove(interface->acl_map, DeviceMacAddress);
+    if (acl_map != NULL) {
+        free(acl_map);
+    }
+
+    if (nl80211_set_acl(interface) != 0) {
+        acl_map = (acl_map_t *)malloc(sizeof(acl_map_t));
+
+        memcpy(acl_map->mac_addr_str, DeviceMacAddress, sizeof(mac_addr_str_t));
+        to_mac_bytes(acl_map->mac_addr_str, acl_map->mac_addr);
+
+        hash_map_put(interface->acl_map, strdup(DeviceMacAddress), acl_map);
+
+        return -1;
+    }
+
+    return 0;
+}
+#endif
+
+INT wifi_hal_delApAclDevices(INT apIndex)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    acl_map_t *acl_map, *temp_acl_map;
+    mac_addr_str_t mac_str;
+
+    interface = get_interface_by_vap_index(apIndex);
+    vap = &interface->vap_info;
+    wifi_hal_dbg_print("%s:%d: Interface: %s \n", __func__, __LINE__, interface->name);
+    
+    if (vap->vap_mode != wifi_vap_mode_ap) {
+        wifi_hal_dbg_print("%s:%d: Not possible to del MAC ACL for STA device\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    if (interface->acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+    acl_map = hash_map_get_first(interface->acl_map);
+
+    if (acl_map == NULL) {
+        wifi_hal_dbg_print("%s:%d: ACL list is empty for ap index %d\n", __func__, __LINE__, apIndex);
+        return RETURN_OK;
+    }
+
+    while (acl_map != NULL) {
+        memcpy(&mac_str, &acl_map->mac_addr_str, sizeof(mac_addr_str_t));
+        acl_map = hash_map_get_next(interface->acl_map, acl_map);
+        temp_acl_map = hash_map_remove(interface->acl_map, mac_str);
+        if (temp_acl_map != NULL) {
+            free(temp_acl_map);
+        }
+    }
+
+    return nl80211_set_acl(interface);
 }
 
 

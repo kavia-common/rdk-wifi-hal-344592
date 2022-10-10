@@ -71,6 +71,8 @@
 #include <netlink/attr.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
+#include "driver_nl80211.h"
+#include "hw_features.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -154,17 +156,6 @@ extern "C" {
 
 extern const struct wpa_driver_ops g_wpa_driver_nl80211_ops;
 
-typedef int    (* platform_pre_init_t)();
-typedef int    (* platform_post_init_t)(wifi_vap_info_map_t *vap_map);
-typedef int    (* platform_keypassphrase_default_t)(char *password, int vap_index);
-typedef int    (* platform_radius_key_default_t)(char *radius_key);
-typedef int    (* platform_ssid_default_t)(char *ssid, int vap_index);
-typedef int    (* platform_wps_pin_default_t)(char *pin);
-typedef int    (* platform_country_code_default_t)(char *code);
-typedef int    (* platform_set_radio_params_t)(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
-typedef int    (* platform_set_radio_pre_init_t)(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
-typedef int    (* platform_create_vap_t)(wifi_radio_index_t index, wifi_vap_info_map_t *map);
-typedef int    (* platform_wps_event_t)(wifi_wps_event_t data);
 typedef struct wifi_enum_to_str_map
 {
     int enum_val;
@@ -175,35 +166,6 @@ typedef struct {
     void    *arg;
     int     *err;
 } wifi_finish_data_t;
-
-typedef struct {
-    char		*device_name;
-    char		*manufacturer;
-    char		*model_name;
-    char		*model_number;
-    char		*model_description;
-    char		*model_url;
-    char		*serial_number;
-    char		*friendly_name;
-    char		*manufacturer_url;
-} wifi_device_info_t;
-
-typedef struct {
-    char			*device;
-    char			*driver_name;
-    wifi_device_info_t		device_info;
-    platform_pre_init_t		platform_pre_init_fn;
-    platform_post_init_t	platform_post_init_fn;
-    platform_set_radio_params_t	platform_set_radio_fn;
-    platform_set_radio_pre_init_t platform_set_radio_pre_init_fn;
-    platform_create_vap_t	platform_create_vap_fn;
-    platform_ssid_default_t           platform_ssid_default_fn;
-    platform_keypassphrase_default_t  platform_keypassphrase_default_fn;
-    platform_radius_key_default_t  platform_radius_key_default_fn;
-    platform_wps_pin_default_t        platform_wps_pin_default_fn;
-    platform_country_code_default_t platform_country_code_default_fn;
-    platform_wps_event_t              platform_wps_event_fn;
-} wifi_driver_info_t;
 
 typedef struct {
     unsigned int    op_class;
@@ -230,6 +192,28 @@ typedef struct {
 typedef struct {
     struct wpa_driver_capa capa;
 
+    u8 *extended_capa, *extended_capa_mask;
+    unsigned int extended_capa_len;
+    struct drv_nl80211_ext_capa iface_ext_capa[NL80211_IFTYPE_MAX];
+    unsigned int num_iface_ext_capa;
+
+    unsigned int num_multichan_concurrent;
+    unsigned int has_key_mgmt:1;
+    unsigned int has_key_mgmt_iftype:1;
+    unsigned int auth_supported:1;
+    unsigned int connect_supported:1;
+    unsigned int wmm_ac_supported:1;
+    unsigned int mac_addr_rand_scan_supported:1;
+    unsigned int mac_addr_rand_sched_scan_supported:1;
+    unsigned int p2p_go_supported:1;
+    unsigned int p2p_client_supported:1;
+    unsigned int p2p_concurrent:1;
+    unsigned int channel_switch_supported:1;
+    unsigned int set_qos_map_supported:1;
+    unsigned int update_ft_ies_supported:1;
+    unsigned int multicast_registrations:1;
+    unsigned int fils_discovery:1;
+    unsigned int unsol_bcast_probe_resp:1;
     unsigned int disabled_11b_rates:1;
     unsigned int pending_remain_on_chan:1;
     unsigned int in_interface_list:1;
@@ -311,6 +295,11 @@ typedef struct {
 } wifi_ap_priv_t;
 
 typedef struct {
+    mac_addr_str_t mac_addr_str;
+    mac_address_t mac_addr;
+} acl_map_t;
+
+typedef struct {
     char name[32];
     char bridge[32];
     unsigned int index;
@@ -344,6 +333,7 @@ typedef struct {
     char   pin[64];
     int beacon_set;
     int mgmt_frames_registered;
+    hash_map_t  *acl_map;
 
 } wifi_interface_info_t;
 
@@ -375,6 +365,18 @@ typedef struct {
     unsigned int  prev_channelWidth;
 } wifi_radio_info_t;
 
+typedef enum {
+    PLATFORM_FLAGS_SET_BSS                 = 0x1,
+    PLATFORM_FLAGS_CONTROL_PORT_FRAME      = 0x1 << 1,
+    PLATFORM_FLAGS_PROBE_RESP_OFFLOAD      = 0x1 << 2,
+    PLATFORM_FLAGS_UPDATE_WIPHY_ON_PRIMARY = 0x1 << 3,
+} wifi_hal_platform_flags_t;
+
+typedef struct {
+    struct nl_cb *nl_cb;
+    struct nl_handle *nl;
+} wifi_netlink_thread_info_t;
+
 typedef struct {
     pthread_t nl_tid;
     pthread_t hapd_eloop_tid;
@@ -389,9 +391,63 @@ typedef struct {
     unsigned int num_radios;
     wifi_radio_info_t radio_info[MAX_NUM_RADIOS];
     wifi_device_callbacks_t device_callbacks;
+    wifi_hal_platform_flags_t platform_flags;
+    pthread_mutex_t	nl_create_socket_lock;
+    hash_map_t  *netlink_socket_map;
 } wifi_hal_priv_t;
 
 wifi_hal_priv_t g_wifi_hal;
+
+typedef int    (* platform_pre_init_t)();
+typedef int    (* platform_post_init_t)(wifi_vap_info_map_t *vap_map);
+typedef int    (* platform_keypassphrase_default_t)(char *password, int vap_index);
+typedef int    (* platform_radius_key_default_t)(char *radius_key);
+typedef int    (* platform_ssid_default_t)(char *ssid, int vap_index);
+typedef int    (* platform_wps_pin_default_t)(char *pin);
+typedef int    (* platform_country_code_default_t)(char *code);
+typedef int    (* platform_set_radio_params_t)(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
+typedef int    (* platform_set_radio_pre_init_t)(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
+typedef int    (* platform_pre_create_vap_t)(wifi_radio_index_t index, wifi_vap_info_map_t *map);
+typedef int    (* platform_create_vap_t)(wifi_radio_index_t index, wifi_vap_info_map_t *map);
+typedef int    (* platform_wps_event_t)(wifi_wps_event_t data);
+typedef int    (* platform_flags_init_t)(int *flags);
+typedef int    (* platform_get_aid_t)(void* priv, u16* aid, const u8* addr);
+typedef int    (* platform_free_aid_t)(void* priv, u16* aid);
+typedef int    (* platform_sync_done_t)(void* priv);
+
+typedef struct {
+    char        *device_name;
+    char        *manufacturer;
+    char        *model_name;
+    char        *model_number;
+    char        *model_description;
+    char        *model_url;
+    char        *serial_number;
+    char        *friendly_name;
+    char        *manufacturer_url;
+} wifi_device_info_t;
+
+typedef struct {
+    char            *device;
+    char            *driver_name;
+    wifi_device_info_t      device_info;
+    platform_pre_init_t     platform_pre_init_fn;
+    platform_post_init_t    platform_post_init_fn;
+    platform_set_radio_params_t platform_set_radio_fn;
+    platform_set_radio_pre_init_t platform_set_radio_pre_init_fn;
+    platform_pre_create_vap_t   platform_pre_create_vap_fn;
+    platform_create_vap_t   platform_create_vap_fn;
+    platform_ssid_default_t           platform_ssid_default_fn;
+    platform_keypassphrase_default_t  platform_keypassphrase_default_fn;
+    platform_radius_key_default_t  platform_radius_key_default_fn;
+    platform_wps_pin_default_t        platform_wps_pin_default_fn;
+    platform_country_code_default_t platform_country_code_default_fn;
+    platform_wps_event_t              platform_wps_event_fn;
+    platform_flags_init_t             platform_flags_init_fn;
+    platform_get_aid_t                platform_get_aid_fn;
+    platform_free_aid_t               platform_free_aid_fn;
+    platform_sync_done_t              platform_sync_done_fn;
+} wifi_driver_info_t;
 
 INT wifi_hal_init();
 INT wifi_hal_pre_init();
@@ -411,7 +467,14 @@ INT wifi_hal_getRadioVapInfoMap(wifi_radio_index_t index, wifi_vap_info_map_t *m
 INT wifi_hal_setApWpsButtonPush(INT apIndex);
 INT wifi_hal_setApWpsPin(INT ap_index, char *wps_pin);
 INT wifi_hal_sendDataFrame(int vap_id, unsigned char *dmac, unsigned char *data_buff, int data_len, BOOL insert_llc, int protocal, int priority);
-
+#ifdef WIFI_HAL_VERSION_3_PHASE2
+INT wifi_hal_addApAclDevice(INT apIndex, mac_address_t DeviceMacAddress);
+INT wifi_hal_delApAclDevice(INT apIndex, mac_address_t DeviceMacAddress);
+#else
+INT wifi_hal_addApAclDevice(INT apIndex, CHAR *DeviceMacAddress);
+INT wifi_hal_delApAclDevice(INT apIndex, CHAR *DeviceMacAddress);
+#endif
+INT wifi_hal_delApAclDevices(INT apIndex);
 wifi_radio_info_t *get_radio_by_index(wifi_radio_index_t index);
 wifi_interface_info_t *get_interface_by_vap_index(unsigned int vap_index);
 BOOL get_ie_by_eid(unsigned int eid, unsigned char *buff, unsigned int buff_len, unsigned char **ie_out, unsigned short *ie_out_len);
@@ -428,9 +491,9 @@ int nl80211_init_primary_interfaces();
 int nl80211_init_radio_info();
 int getIpStringFromAdrress(char * ipString,  ip_addr_t * ip);
 
-int init_nl80211();
-void wifi_hal_nl80211_wps_pbc(unsigned int ap_index);
-int wifi_hal_nl80211_wps_pin(unsigned int ap_index, char *wps_pin);
+int     init_nl80211();
+void    wifi_hal_nl80211_wps_pbc(unsigned int ap_index);
+int     wifi_hal_nl80211_wps_pin(unsigned int ap_index, char *wps_pin);
 int     update_channel_flags();
 int     handle_public_action_frame(INT ap_index, mac_address_t sta_mac, wifi_publicActionFrameHdr_t *ppublic_hdr, UINT len);
 int     nl80211_create_interface(wifi_radio_info_t *radio, wifi_vap_info_t *vap, wifi_interface_info_t **interface);
@@ -441,12 +504,17 @@ int     nl80211_remove_from_bridge(const char *if_name);
 int     nl80211_update_interface(wifi_interface_info_t *interface);
 int     nl80211_interface_enable(const char *ifname, bool enable);
 int     nl80211_connect_sta(wifi_interface_info_t *interface);
-int nl80211_start_scan(wifi_interface_info_t *interface, unsigned int num_freq, unsigned int  *freq_list, unsigned int num_ssid, unsigned int dwell_time, ssid_t *ssid_list);
+int     nl80211_start_scan(wifi_interface_info_t *interface, unsigned int num_freq, unsigned int  *freq_list, unsigned int num_ssid, unsigned int dwell_time, ssid_t *ssid_list);
 int     nl80211_get_scan_results(wifi_interface_info_t *interface);
 int     nl80211_switch_channel(wifi_radio_info_t *radio);
+int     nl80211_tx_control_port(wifi_interface_info_t *interface, const u8 *dest, u16 proto, const u8 *buf, size_t len, int no_encrypt);
+int     nl80211_set_acl(wifi_interface_info_t *interface);
+int     init_hostap_hw_features(wifi_interface_info_t *interface);
+int     update_hostap_data(wifi_interface_info_t *interface);
 int     update_hostap_interfaces(wifi_radio_info_t *radio);
 int     update_hostap_interface_params(wifi_interface_info_t *interface);
 int     update_hostap_config_params(wifi_radio_info_t *radio);
+int     update_hostap_dtim_period(wifi_radio_info_t *radio);
 int     nl80211_get_channel_bw_conn(wifi_interface_info_t *interface);
 void    update_wpa_sm_params(wifi_interface_info_t *interface);
 void    update_eapol_sm_params(wifi_interface_info_t *interface);
@@ -459,6 +527,17 @@ int     wifi_send_eapol(void *priv, const u8 *addr, const u8 *data,
                     size_t data_len, int encrypt,
                     const u8 *own_addr, u32 flags);
 void   *wifi_drv_init(struct hostapd_data *hapd, struct wpa_init_params *params);
+
+#if HOSTAPD_VERSION >= 210 //2.10
+int wifi_drv_vendor_cmd(void *priv, unsigned int vendor_id,
+    unsigned int subcmd, const u8 *data,
+    size_t data_len, enum nested_attr nested_attr_flag, struct wpabuf *buf);
+#else
+int wifi_drv_vendor_cmd(void *priv, unsigned int vendor_id,
+                  unsigned int subcmd, const u8 *data,
+                  size_t data_len, struct wpabuf *buf);
+#endif // HOSTAPD_VERSION >= 210
+
 int     wifi_set_privacy(void *priv, int enabled);
 int     wifi_set_ssid(void *priv, const u8 *buf, int len);
 int     wifi_drv_set_operstate(void *priv, int state);
@@ -553,8 +632,13 @@ extern int platform_get_wps_pin_default(char *pin);
 extern int platform_wps_event(wifi_wps_event_t data);
 extern int platform_get_country_code_default(char *code);
 extern int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
+extern int platform_pre_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map);
 extern int platform_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map);
 extern int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
+extern int platform_flags_init(int *flags);
+extern int platform_get_aid(void* priv, u16* aid, const u8* addr);
+extern int platform_free_aid(void* priv, u16* aid);
+extern int platform_sync_done(void* priv);
 platform_pre_init_t     	get_platform_pre_init_fn();
 platform_post_init_t    	get_platform_post_init_fn();
 platform_keypassphrase_default_t     get_platform_keypassphrase_default_fn();
@@ -564,8 +648,13 @@ platform_wps_event_t                 get_platform_wps_event_fn();
 platform_country_code_default_t get_platform_country_code_default_fn();
 platform_set_radio_params_t 	get_platform_set_radio_fn();
 platform_set_radio_pre_init_t get_platform_set_radio_pre_init_fn();
+platform_pre_create_vap_t           get_platform_pre_create_vap_fn();
 platform_create_vap_t 		get_platform_create_vap_fn();
 platform_radius_key_default_t       get_platform_radius_key_default_fn();
+platform_flags_init_t               get_platform_flags_init_fn();
+platform_get_aid_t                  get_platform_get_aid_fn();
+platform_free_aid_t                 get_platform_free_aid_fn();
+platform_sync_done_t                get_platform_sync_done_fn();
 
 INT wifi_hal_wps_event(wifi_wps_event_t data);
 INT wifi_hal_get_default_wps_pin(char *pin);

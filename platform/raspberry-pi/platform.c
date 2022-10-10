@@ -70,3 +70,28 @@ int nvram_get_current_ssid(char *l_ssid, int vap_index)
 {
     return 0;
 }
+
+int platform_pre_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
+{
+    return 0;
+}
+
+int platform_flags_init(int *flags)
+{
+    return 0;
+}
+
+int platform_get_aid(void* priv, u16* aid, const u8* addr)
+{
+    return 0;
+}
+
+int platform_free_aid(void* priv, u16* aid)
+{
+    return 0;
+}
+
+int platform_sync_done(void* priv)
+{
+    return 0;
+}

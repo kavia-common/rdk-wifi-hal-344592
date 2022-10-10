@@ -21,6 +21,7 @@ AM_CFLAGS += -D_ANSC_USER
 AM_CFLAGS += -D_ANSC_LITTLE_ENDIAN_
 AM_CFLAGS += -Wall -Werror -Wextra -Wno-unused-parameter -Wno-pointer-sign -Wno-sign-compare -Wno-type-limits -Wno-format-truncation
 AM_CPPFLAGS = -Wall -Werror
+AUTOMAKE_OPTIONS = subdir-objects
 SUBDIRS = .
 if WITH_GTEST_SUPPORT
 SUBDIRS += test
@@ -49,6 +50,11 @@ endif
 if TCXB8_PORT 
 librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/broadcom
 librdk_wifihal_la_SOURCES += ../platform/broadcom/platform.c
+endif
+
+if CMXB7_PORT
+librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/intel
+librdk_wifihal_la_SOURCES += ../platform/intel/platform.c
 endif
 
 if SKYSR300_PORT
