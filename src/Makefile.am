@@ -61,6 +61,11 @@ librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/xle
 librdk_wifihal_la_SOURCES += ../platform/xle/platform_xle.c
 endif
 
+if SKYSR213_PORT
+librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/broadcom
+librdk_wifihal_la_SOURCES += ../platform/broadcom/platform.c
+endif
+
 include_HEADERS = wifi_hal_rdk.h wifi_hal_rdk_framework.h ieee80211.h ../util_crypto/aes_siv.h
 
 if ONE_WIFIBUILD

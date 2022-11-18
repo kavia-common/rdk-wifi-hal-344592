@@ -134,11 +134,20 @@ wifi_interface_name_idex_map_t interface_index_map[] = {
     {2, 2,  "wl2.7",   "brlan113", 0,     22,     "mesh_backhaul_6g"},
 #endif
 
+#ifdef SKYSR213_PORT // for Broadcom based platforms
+    {0, 0,  "wl0.1",   "brlan0",  100,    0,      "private_ssid_2g"},
+    {1, 1,  "wl1.1",   "brlan0",  100,    1,      "private_ssid_5g"},
+    {0, 0,  "wl0.7",   "brlan6",    0,    12,     "mesh_backhaul_2g"},
+    {1, 1,  "wl1.7",   "brlan7",    0,    13,     "mesh_backhaul_5g"},
+    {0, 0,  "wl0",     "brlan1",    0,    14,     "mesh_sta_2g"},
+    {1, 1,  "wl1",     "brlan1",    0,    15,     "mesh_sta_5g"},
+#endif
+
     // for Intel based platforms
 };
 
 static radio_interface_mapping_t l_radio_interface_map[] = {
-#if defined(TCXB7_PORT)
+#if defined(TCXB7_PORT) || defined(SKYSR213_PORT)
     { 0, 0, "radio1", "wl0"},
     { 1, 1, "radio2", "wl1"},
 #endif
@@ -148,6 +157,8 @@ static radio_interface_mapping_t l_radio_interface_map[] = {
     { 1, 1, "radio2", "wl1"},
     { 2, 2, "radio3", "wl2"},
 #endif
+
+
 };
 
 const wifi_driver_info_t  driver_info = {
@@ -218,6 +229,23 @@ const wifi_driver_info_t  driver_info = {
     platform_get_country_code_default,
     platform_wps_event
 #endif
+
+#ifdef SKYSR213_PORT // for Broadcom HUB6
+    "skysr213",
+    "dhd",
+    {"Sky Wireless Gateway","SKY","HUB6","SKYSR213","Model Description","Model URL","267","WPS Access Point","Manufacturer URL"},
+    platform_pre_init,
+    platform_post_init,
+    platform_set_radio,
+    platform_set_radio_pre_init,
+    platform_create_vap,
+    platform_get_ssid_default,
+    platform_get_keypassphrase_default,
+    platform_get_radius_key_default,
+    platform_get_wps_pin_default,
+    platform_get_country_code_default
+#endif
+    
 };
 
 static struct wifiCountryEnumStrMap wifi_country_map[] =
@@ -1122,7 +1150,7 @@ INT get_coutry_str_from_oper_params(wifi_radio_operationParam_t *operParams, cha
 
     memset(tmp_countrycode_str, 0, sizeof(tmp_countrycode_str));
     memset(tmp_environment_str, 0, sizeof(tmp_environment_str));
-    
+   
     // Default country as "USI"
     strcpy(tmp_countrycode_str, "US");
     strcpy(tmp_environment_str, "I");
@@ -1163,7 +1191,6 @@ INT get_coutry_str_from_code(wifi_countrycode_type_t code, char *country)
         //Copy default value
         strcpy(country, "US");
     }
-
     return RETURN_OK;
 }
 
@@ -1251,13 +1278,14 @@ int get_op_class_from_radio_params(wifi_radio_operationParam_t *param)
 
     get_wifi_op_class_info(param->countryCode, &cc_op_class);
 
+
     // country code match
     if (cc_op_class.cc != param->countryCode) {
         wifi_hal_error_print("%s:%d:Could not find country code : %d\n", __func__, __LINE__, param->countryCode);
         return RETURN_ERR;
     }
 
-    // channel match
+    // channel match with country op class
     for (i = 0; i < ARRAY_SZ(cc_op_class.op_class); i++) {
         op_class = &cc_op_class.op_class[i];
         for (j = 0; j < op_class->num; j++) {
@@ -1267,7 +1295,17 @@ int get_op_class_from_radio_params(wifi_radio_operationParam_t *param)
         }
     }
 
-    wifi_hal_error_print("%s:%d:Could not find channel is list for country : %d\n", __func__, __LINE__, param->countryCode);
+    // channel match with global op class
+    for (i = 0; i < ARRAY_SZ(other_op_class.op_class); i++) {
+        op_class = &other_op_class.op_class[i];
+        for (j = 0; j < op_class->num; j++) {
+            if (op_class->ch_list[j] == param->channel) {
+                return op_class->op_class;
+            }
+        }
+    }
+
+    wifi_hal_error_print("%s:%d:Could not find channel is list for country op class / global op class : %d\n", __func__, __LINE__, param->countryCode);
     return RETURN_ERR;
 }
 

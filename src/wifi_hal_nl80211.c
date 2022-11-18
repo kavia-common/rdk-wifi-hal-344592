@@ -2692,7 +2692,7 @@ static void nl80211_fill_chandef(struct nl_msg *msg, wifi_radio_info_t *radio, w
     get_coutry_str_from_code(param->countryCode, country);
     freq = ieee80211_chan_to_freq(country, param->op_class, param->channel);
     freq1 = freq;
-
+    wifi_hal_dbg_print("%s:%d: index= %d Country = %s, country code = %d, channel = :%d op_class = %d \n", __func__, __LINE__, radio->index, country, param->countryCode, param->channel, param->op_class);
     switch (param->channelWidth) {
         case WIFI_CHANNELBANDWIDTH_20MHZ:
             width = NL80211_CHAN_WIDTH_20;

@@ -239,14 +239,14 @@ int platform_get_keypassphrase_default(char *password, int vap_index)
     FILE *fp = NULL;
 
     if(is_wifi_hal_vap_private(vap_index)) {
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
         fp = popen("grep \"WIFIPASSWORD=\" /tmp/serial.txt | cut -d '=' -f 2 | tr -d '\r\n'","r");
 #else
         fp = popen("grep \"Default WIFI Password:\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
 #endif
         if(fp != NULL) {
             while (fgets(value, sizeof(value), fp) != NULL){
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
                 strncpy(password,value,strlen(value));
 #else
                 strncpy(password,value,strlen(value)-1);
@@ -283,7 +283,7 @@ int platform_get_ssid_default(char *ssid, int vap_index){
 
     if(is_wifi_hal_vap_private(vap_index)) {
 
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
         fp = popen("grep \"FACTORYSSID=\" /tmp/serial.txt | cut -d '=' -f2 | tr -d '\r\n'","r");
 #else
         fp = popen("grep \"Default 2.4 GHz SSID:\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
@@ -291,7 +291,7 @@ int platform_get_ssid_default(char *ssid, int vap_index){
 
         if(fp != NULL) {
             while (fgets(value, sizeof(value), fp) != NULL){
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
                 strncpy(ssid,value,strlen(value));
 #else
                 strncpy(ssid,value,strlen(value)-1);
@@ -323,14 +323,14 @@ int platform_get_wps_pin_default(char *pin)
 {
     char value[BUFFER_LENGTH_WIFIDB] = {0};
     FILE *fp = NULL;
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
     fp = popen("grep \"WPSPIN=\" /tmp/serial.txt | cut -d '=' -f2 | tr -d '\r\n'","r");
 #else
     fp = popen("grep \"Default WPS Pin:\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
 #endif
     if(fp != NULL) {
         while (fgets(value, sizeof(value), fp) != NULL) {
-#ifdef SKYSR300_PORT
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
             strncpy(pin,value,strlen(value));
 #else
             strncpy(pin,value,strlen(value)-1);
@@ -371,11 +371,19 @@ int platform_get_country_code_default(char *code)
     char value[BUFFER_LENGTH_WIFIDB] = {0};
     FILE *fp = NULL;
 
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
+    fp = popen("grep \"REGION=\" /tmp/serial.txt | cut -d '=' -f 2 | tr -d '\r\n'","r");
+#else
     fp = popen("cat /data/.customerId", "r");
+#endif
 
     if (fp != NULL) {
         while(fgets(value, sizeof(value), fp) != NULL) {
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
+            strncpy(code, value, strlen(value));
+#else
             strncpy(code, value, strlen(value)-1);
+#endif
         }
         pclose(fp);
         return 0;
