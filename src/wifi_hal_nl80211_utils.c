@@ -130,8 +130,12 @@ wifi_interface_name_idex_map_t interface_index_map[] = {
     {0, 1,  "wl1.7",   "brlan113", 113,   13,     "mesh_backhaul_5g"},
     {2, 2,  "wl2",     "",         0,     23,     "mesh_sta_6g"},
     {2, 2,  "wl2.1",   "brlan0",   100,   16,     "private_ssid_6g"},
+    {2, 2,  "wl2.2",   "brlan1",   101,   17,     "iot_ssid_6g"},
+#if 0
     {2, 2,  "wl2.4",   "brlan6",   106,   19,     "lnf_psk_6g"},
-    {2, 2,  "wl2.7",   "brlan113", 0,     22,     "mesh_backhaul_6g"},
+    {2, 2,  "wl2.6",   "br106",    106,   21,     "lnf_radius_6g"},
+#endif
+    {2, 2,  "wl2.7",   "brlan114", 114,   22,     "mesh_backhaul_6g"},
 #endif
 
 #ifdef SKYSR213_PORT // for Broadcom based platforms
@@ -152,12 +156,17 @@ static radio_interface_mapping_t l_radio_interface_map[] = {
     { 1, 1, "radio2", "wl1"},
 #endif
 
-#if defined(TCXB8_PORT) || defined(XLE_PORT)
+#if defined(XLE_PORT)
     { 0, 0, "radio1", "wl0"},
     { 1, 1, "radio2", "wl1"},
     { 2, 2, "radio3", "wl2"},
 #endif
 
+#if defined(TCXB8_PORT) 
+    { 1, 0, "radio1", "wl0"},
+    { 0, 1, "radio2", "wl1"},
+    { 2, 2, "radio3", "wl2"},
+#endif
 
 };
 
