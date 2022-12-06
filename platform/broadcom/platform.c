@@ -4,6 +4,7 @@
 #include "wlcsm_lib_api.h"
 
 #define BUFFER_LENGTH_WIFIDB 256
+#define BUFLEN_128  128
 
 int sta_disassociated(int ap_index, char *mac, int reason);
 int sta_deauthenticated(int ap_index, char *mac, int reason);
@@ -124,6 +125,7 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
 
     char temp_buff[BUF_SIZE];
     char param_name[NVRAM_NAME_SIZE];
+    char cmd[BUFLEN_128];
     wifi_radio_info_t *radio;
 
     radio = get_radio_by_rdk_index(index);
@@ -149,6 +151,27 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
         memset(param_name, 0 ,sizeof(param_name));
         sprintf(param_name, "wl%d_country_code", index);
         set_string_nvram_param(param_name, temp_buff);
+    }
+
+    if (radio->oper_param.autoChannelEnabled != operationParam->autoChannelEnabled) {
+        memset(cmd, 0 ,sizeof(cmd));
+        if (operationParam->autoChannelEnabled == true) {
+            /* Set acsd2 autochannel select mode */
+            wifi_hal_dbg_print("%s():%d Enabling autoChannel in radio index %d\n", __FUNCTION__, __LINE__, index);
+            sprintf(cmd, "acs_cli2 -i wl%d mode 2", index);
+            system(cmd);
+
+            /* Run acsd2 autochannel */
+            memset(cmd, 0 ,sizeof(cmd));
+            sprintf(cmd, "acs_cli2 -i wl%d autochannel", index);
+            system(cmd);
+        }
+        else {
+            /* Set acsd2 disabled mode */
+            wifi_hal_dbg_print("%s():%d Disabling autoChannel in radio index %d\n", __FUNCTION__, __LINE__, index);
+            sprintf(cmd, "acs_cli2 -i wl%d mode 0", index);
+            system(cmd);
+        }
     }
 
     return 0;
@@ -425,11 +448,75 @@ int nvram_get_current_ssid(char *l_ssid, int vap_index)
     return 0;
 }
 
+static int get_control_side_band(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam)
+{
+    wifi_radio_info_t *radio;
+    int sec_chan_offset, freq;
+    char country[8];
+
+    radio = get_radio_by_rdk_index(index);
+    get_coutry_str_from_code(operationParam->countryCode, country);
+
+    freq = ieee80211_chan_to_freq(country, operationParam->op_class, operationParam->channel);
+    sec_chan_offset = get_sec_channel_offset(radio, freq);
+
+    return sec_chan_offset;
+}
+
+static char *channel_width_to_string_convert(wifi_channelBandwidth_t channelWidth)
+{
+    switch(channelWidth)
+    {
+    case WIFI_CHANNELBANDWIDTH_20MHZ:
+        return "20";
+    case WIFI_CHANNELBANDWIDTH_40MHZ:
+        return "40";
+    case WIFI_CHANNELBANDWIDTH_80MHZ:
+        return "80";
+    case WIFI_CHANNELBANDWIDTH_160MHZ:
+        return "160";
+    case WIFI_CHANNELBANDWIDTH_80_80MHZ:
+    default:
+        return NULL;
+    }
+}
+
+static int get_chanspec_string(wifi_radio_operationParam_t *operationParam, char *chspec, wifi_radio_index_t index)
+{
+    char *sideband = "";
+    char *band = "";
+    char *bw = NULL;
+
+    if (operationParam->band != WIFI_FREQUENCY_2_4_BAND) {
+        bw = channel_width_to_string_convert(operationParam->channelWidth);
+        if (bw == NULL) {
+            wifi_hal_error_print("%s:%d: Channel width %d not supported in radio index: %d\n", __func__, __LINE__, operationParam->channelWidth, index);
+            return -1;
+        }
+    }
+
+    if (operationParam->band == WIFI_FREQUENCY_6_BAND) {
+        band = "6g";
+    }
+    if (operationParam->channelWidth == WIFI_CHANNELBANDWIDTH_20MHZ) {
+        sprintf(chspec, "%s%d", band, operationParam->channel);
+    }
+    else if ((operationParam->channelWidth == WIFI_CHANNELBANDWIDTH_40MHZ) && (operationParam->band != WIFI_FREQUENCY_6_BAND)) {
+        sideband = (get_control_side_band(index, operationParam)) == 1 ? "l" : "u";
+        sprintf(chspec, "%d%s", operationParam->channel, sideband);
+    }
+    else {
+        sprintf(chspec, "%s%d/%s", band, operationParam->channel, bw);
+    }
+    return 0;
+}
+
 int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam)
 {
-    
     char temp_buff[BUF_SIZE];
     char param_name[NVRAM_NAME_SIZE];
+    char chspecbuf[NVRAM_NAME_SIZE];
+    memset(chspecbuf, 0 ,sizeof(chspecbuf));
     memset(param_name, 0 ,sizeof(param_name));
     memset(temp_buff, 0 ,sizeof(temp_buff));
     wifi_hal_dbg_print("%s:%d: Enter radio index:%d\n", __func__, __LINE__, index);
@@ -451,6 +538,11 @@ int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *op
         memset(param_name, 0 ,sizeof(param_name));
         sprintf(param_name, "wl%d_channel", index);
         set_decimal_nvram_param(param_name, operationParam->channel);
+
+        get_chanspec_string(operationParam, chspecbuf, index);
+        memset(param_name, 0 ,sizeof(param_name));
+        sprintf(param_name, "wl%d_chanspec", index);
+        set_string_nvram_param(param_name, chspecbuf);
     }
 
     memset(param_name, 0 ,sizeof(param_name));

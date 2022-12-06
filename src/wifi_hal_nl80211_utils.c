@@ -1319,7 +1319,38 @@ int get_op_class_from_radio_params(wifi_radio_operationParam_t *param)
     return RETURN_ERR;
 }
 
-void wifi_hal_print(wifi_hal_log_level_t level, char *format, ...)
+int get_sec_channel_offset(wifi_radio_info_t *radio, int freq)
+{
+    int i;
+    enum nl80211_band band;
+
+    if ((freq >= MIN_FREQ_MHZ_2G) && (freq <= MAX_FREQ_MHZ_2G)) {
+        band = NL80211_BAND_2GHZ;
+    } else if ((freq >= MIN_FREQ_MHZ_5G) && (freq <= MAX_FREQ_MHZ_5G)) {
+        band = NL80211_BAND_5GHZ;
+    } else if ((freq >= MIN_FREQ_MHZ_6G) && (freq <= MAX_FREQ_MHZ_6G)) {
+#ifndef LINUX_VM_PORT
+        band = NL80211_BAND_6GHZ;
+#endif
+    } else {
+        wifi_hal_info_print("%s:%d: Unknown frequency: %d in attribute of phy index: %d\n", __func__, __LINE__, 
+            freq, radio->index);
+        return 0;
+    }
+
+    for (i = 0; i < radio->hw_modes[band].num_channels; i++) {
+        if (freq == radio->channel_data[band][i].freq) {
+            if (radio->channel_data[band][i].allowed_bw & HOSTAPD_CHAN_WIDTH_40P)
+                return 1;
+            if (radio->channel_data[band][i].allowed_bw & HOSTAPD_CHAN_WIDTH_40M)
+                return -1;
+        }
+    }
+
+    return 0;
+}
+
+void wifi_hal_print(wifi_hal_log_level_t level, const char *format, ...)
 {
     char buff[256] = {0};
     va_list list;

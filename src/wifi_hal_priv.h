@@ -502,6 +502,7 @@ void wps_enum_to_string(unsigned int methods, char *str, int len);
 int get_radio_variant_str_from_int(unsigned char variant, char *variant_str);
 int get_rdk_radio_index(unsigned int phy_index);
 int get_interface_name_from_radio_index(uint8_t radio_index, char *interface_name);
+int get_sec_channel_offset(wifi_radio_info_t *radio, int freq);
 
 BOOL is_wifi_hal_vap_private(UINT ap_index);
 BOOL is_wifi_hal_vap_xhs(UINT ap_index);
@@ -530,7 +531,7 @@ typedef enum {
     WIFI_HAL_LOG_LVL_ERROR
 }wifi_hal_log_level_t;
 
-void wifi_hal_print(wifi_hal_log_level_t level, char *format, ...);
+void wifi_hal_print(wifi_hal_log_level_t level, const char *format, ...);
 
 #define wifi_hal_dbg_print(format, ...)  wifi_hal_print(WIFI_HAL_LOG_LVL_DEBUG, format, ##__VA_ARGS__)
 #define wifi_hal_info_print(format, ...)  wifi_hal_print(WIFI_HAL_LOG_LVL_INFO, format, ##__VA_ARGS__)

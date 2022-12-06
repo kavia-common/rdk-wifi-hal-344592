@@ -2512,37 +2512,6 @@ int nl80211_init_radio_info()
     return 0;
 }
 
-static int get_sec_channel_offset(wifi_radio_info_t *radio, int freq)
-{
-    int i;
-    enum nl80211_band band;
-
-    if ((freq >= MIN_FREQ_MHZ_2G) && (freq <= MAX_FREQ_MHZ_2G)) {
-        band = NL80211_BAND_2GHZ;
-    } else if ((freq >= MIN_FREQ_MHZ_5G) && (freq <= MAX_FREQ_MHZ_5G)) {
-        band = NL80211_BAND_5GHZ;
-    } else if ((freq >= MIN_FREQ_MHZ_6G) && (freq <= MAX_FREQ_MHZ_6G)) {
-#ifndef LINUX_VM_PORT
-        band = NL80211_BAND_6GHZ;
-#endif
-    } else {
-        wifi_hal_info_print("%s:%d: Unknown frequency: %d in attribute of phy index: %d\n", __func__, __LINE__, 
-            freq, radio->index);
-        return 0;
-    }
-
-    for (i = 0; i < radio->hw_modes[band].num_channels; i++) {
-        if (freq == radio->channel_data[band][i].freq) {
-            if (radio->channel_data[band][i].allowed_bw & HOSTAPD_CHAN_WIDTH_40P)
-                return 1;
-            if (radio->channel_data[band][i].allowed_bw & HOSTAPD_CHAN_WIDTH_40M)
-                return -1;
-        }
-    }
-
-    return 0;
-}
-
 static int set_beacon_data(struct nl_msg *msg, struct beacon_data *settings)
 {
     if ((settings->head && nla_put(msg, NL80211_ATTR_BEACON_HEAD,
