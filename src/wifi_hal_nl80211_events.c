@@ -35,7 +35,6 @@
 #include <netlink/genl/genl.h>
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
-#include <linux/nl80211.h>
 
 int no_seq_check(struct nl_msg *msg, void *arg)
 {

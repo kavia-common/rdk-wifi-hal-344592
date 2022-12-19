@@ -64,7 +64,12 @@
 #include "wifi_hal_rdk_framework.h"
 #include "collection.h"
 #include "driver.h"
-#include <linux/nl80211.h>
+/*
+switch to use nl80211_copy.h because 'linux/nl80211.h' from linux header does not contain
+6GHz definitions. The 6GHz defines for nl80211 are in hostapd 2.10 but not hostapd 2.9.
+*/
+// #include <linux/nl80211.h>
+#include <drivers/nl80211_copy.h>
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 #include <netlink/handlers.h>

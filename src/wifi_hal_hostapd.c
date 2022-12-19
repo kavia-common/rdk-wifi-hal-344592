@@ -430,6 +430,7 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             break;
         case wifi_security_mode_wpa3_personal:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_SAE;
+            conf->auth_algs = WPA_AUTH_ALG_SAE;
 #if HOSTAPD_VERSION >= 210 //2.10
             conf->sae_pwe = 1;  /* 0 = Hunt-and-Peck, 1 = Hash-to-Element, 2 = both */
 #endif
@@ -442,6 +443,7 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             break;
         case wifi_security_mode_wpa3_transition:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
+            conf->auth_algs = WPA_AUTH_ALG_SAE | WPA_AUTH_ALG_SHARED;
 #if HOSTAPD_VERSION >= 210 //2.10
             conf->sae_pwe = 2;
 #endif
@@ -1046,9 +1048,11 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         band = NL80211_BAND_5GHZ;
         break;
 
+#if HOSTAPD_VERSION >= 210
     case WIFI_FREQUENCY_6_BAND:
         band = NL80211_BAND_6GHZ;
         break;
+#endif
 
     default:
         wifi_hal_error_print("%s:%d: Unknown band: %d\n", __func__, __LINE__,
@@ -1333,7 +1337,7 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
         iconf->hw_mode = HOSTAPD_MODE_IEEE80211A;
         iconf->ieee80211ac = 1;
         //iconf->require_vht = 1;
-        iconf->ieee80211n = 1;
+        //iconf->ieee80211n = 1;
         //iconf->require_ht = 1;
     }
 
@@ -1345,7 +1349,7 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
             iconf->hw_mode = HOSTAPD_MODE_IEEE80211G;
         }
         iconf->ieee80211ax = 1;
-        iconf->ieee80211n = 1;
+        //iconf->ieee80211n = 1;
         //iconf->require_ht = 1;
         //iconf->require_vht = 1;
     }

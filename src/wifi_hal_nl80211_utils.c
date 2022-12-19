@@ -35,7 +35,6 @@
 #include <netlink/genl/genl.h>
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
-#include <linux/nl80211.h>
 
 wifi_interface_name_idex_map_t interface_index_map[] = {
 #ifdef RASPBERRY_PI_PORT
@@ -622,7 +621,6 @@ wifi_country_radio_op_class_t us_op_class = {
     {
         { 1, 115, 4, {36, 40, 44, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} },
         { 2, 118, 4, {52, 56, 60, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} },
-        { 3, 124, 4, {149, 153, 157, 161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} },
         { 4, 121, 12, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 0, 0, 0, 0} },
         { 5, 125, 5, {149, 153, 157, 161, 165, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} },
         { 12, 81, 11, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0, 0} }
@@ -1476,9 +1474,11 @@ int get_sec_channel_offset(wifi_radio_info_t *radio, int freq)
         band = NL80211_BAND_2GHZ;
     } else if ((freq >= MIN_FREQ_MHZ_5G) && (freq <= MAX_FREQ_MHZ_5G)) {
         band = NL80211_BAND_5GHZ;
+#if HOSTAPD_VERSION >= 210
     } else if ((freq >= MIN_FREQ_MHZ_6G) && (freq <= MAX_FREQ_MHZ_6G)) {
 #ifndef LINUX_VM_PORT
         band = NL80211_BAND_6GHZ;
+#endif
 #endif
     } else {
         wifi_hal_info_print("%s:%d: Unknown frequency: %d in attribute of phy index: %d\n", __func__, __LINE__, 

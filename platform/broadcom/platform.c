@@ -19,7 +19,10 @@ typedef struct wl_runtime_params {
 }wl_runtime_params_t;
 
 static wl_runtime_params_t g_wl_runtime_params[] = {
-    {"he color_collision", "0x7"}
+    {"he color_collision", "0x7"},
+    {"nmode_protection_override", "0"},
+    {"protection_control", "0"},
+    {"gmode_protection_control", "0"}
 };
 
 static void set_wl_runtime_configs (const wifi_vap_info_map_t *vap_map);
@@ -97,9 +100,9 @@ static void set_wl_runtime_configs (const wifi_vap_info_map_t *vap_map)
     for(radio_index = 0; radio_index < g_wifi_hal.num_radios; radio_index++) {
         if (vap_map != NULL) {
             for(vap_index = 0; vap_index < vap_map->num_vaps; vap_index++) {
-                if (is_wifi_hal_vap_private(vap_index)) {
+                vap = &vap_map->vap_array[vap_index];
+                if (is_wifi_hal_vap_private(vap->vap_index)) {
                     memset (interface_name, 0 ,sizeof(interface_name));
-                    vap = &vap_map->vap_array[vap_index];
                     get_interface_name_from_vap_index(vap->vap_index, interface_name);
                     for (wl_elems_index = 0; wl_elems_index < no_of_elems; wl_elems_index++) {
                         snprintf(sys_cmd, sizeof(sys_cmd), "wl -i %s %s %s", interface_name, g_wl_runtime_params[wl_elems_index].param_name, g_wl_runtime_params[wl_elems_index].param_val);
@@ -307,13 +310,6 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     wlcsm_nvram_set("acsd2_started", "1");
 
     wifi_hal_info_print("%s:%d: acsd2_started\r\n", __func__, __LINE__);
-
-    system("wl -i wl0.1 nmode_protection_override 0");
-    system("wl -i wl1.1 nmode_protection_override 0");
-    system("wl -i wl0.1 protection_control 0");
-    system("wl -i wl1.1 protection_control 0");
-    system("wl -i wl0.1 gmode_protection_control 0");
-    system("wl -i wl1.1 gmode_protection_control 0");
 
     //set runtime configs using wl command.
     set_wl_runtime_configs(vap_map);

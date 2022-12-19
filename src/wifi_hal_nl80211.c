@@ -37,7 +37,6 @@
 #include <net/if.h>
 #include <linux/rtnetlink.h>
 #include <netpacket/packet.h>
-#include <linux/nl80211.h>
 #include <netlink/route/link/bridge.h>
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
@@ -1554,10 +1553,12 @@ static struct hostapd_hw_modes *phy_info_freqs(wifi_radio_info_t *radio, struct 
         } else if ((freq >= MIN_FREQ_MHZ_5G) && (freq <= MAX_FREQ_MHZ_5G)) {
             freq_band = WIFI_FREQUENCY_5_BAND;
             band = NL80211_BAND_5GHZ;
+#if HOSTAPD_VERSION >= 210
         } else if ((freq >= MIN_FREQ_MHZ_6G) && (freq <= MAX_FREQ_MHZ_6G)) {
             freq_band = WIFI_FREQUENCY_6_BAND;
 #ifndef LINUX_VM_PORT
             band = NL80211_BAND_6GHZ;
+#endif
 #endif
         } else {
             //wifi_hal_dbg_print("%s:%d: Unknown frequency: %d in attribute of phy index: %d\n", __func__, __LINE__,
@@ -3893,7 +3894,7 @@ static int nl80211_put_freq_params(struct nl_msg *msg, const struct hostapd_freq
     return 0;
 }
 
-static void nl80211_fill_chandef(struct nl_msg *msg, wifi_radio_info_t *radio, wifi_interface_info_t *interface)
+static int nl80211_fill_chandef(struct nl_msg *msg, wifi_radio_info_t *radio, wifi_interface_info_t *interface)
 {
     int freq, freq1;
     unsigned int width;
@@ -3940,12 +3941,18 @@ static void nl80211_fill_chandef(struct nl_msg *msg, wifi_radio_info_t *radio, w
             break;
     }
 
+    if (freq1 == -1) {
+        wifi_hal_error_print("%s:%d - No center frequency is found\n", __func__, __LINE__);
+        return -1;
+    }
+
     nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, freq);
     nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ1, freq1);
     nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ2, 0);
     nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH, width);
 
     wifi_hal_dbg_print("%s:%d Setting channel freq:%d freq1:%d width:%d on interface:%d\n", __func__, __LINE__, freq, freq1, width, interface->index);
+    return 0;
 }
 
 int nl80211_switch_channel(wifi_radio_info_t *radio)
@@ -4113,7 +4120,9 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
 
            msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_SET_WIPHY);
            nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index);
-           nl80211_fill_chandef(msg, radio, interface);
+           if (nl80211_fill_chandef(msg, radio, interface) == -1) {
+                return -1;
+            }
 
            if ((ret = send_and_recv(msg, wiphy_set_info_handler, &g_wifi_hal, NULL, NULL))) {
                wifi_hal_error_print("%s:%d: reconfig error, updating dev:%d error: %s ret:%d\n",
@@ -7340,11 +7349,17 @@ int wifi_drv_set_acl(void *priv, struct hostapd_acl_params *params)
     return ret;
 }
 
-static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags,
-                   struct wpa_driver_ap_params *params)
+#if HOSTAPD_VERSION < 210
+static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags, struct wpa_driver_ap_params *params)
+#else
+static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags, u64 flags2, struct wpa_driver_ap_params *params)
+#endif
 {
     struct nlattr *bands, *band;
     struct nl80211_txrate_vht vht_rate;
+#if HOSTAPD_VERSION >= 210
+    struct nl80211_txrate_he he_rate;
+#endif
 
     if (!params->freq ||
         (params->beacon_rate == 0 &&
@@ -7361,7 +7376,15 @@ static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags,
         band = nla_nest_start(msg, NL80211_BAND_2GHZ);
         break;
     case HOSTAPD_MODE_IEEE80211A:
+#if HOSTAPD_VERSION >= 210 //2.10
+        if (is_6ghz_freq(params->freq->freq)) {
+            band = nla_nest_start(msg, NL80211_BAND_6GHZ);
+        } else {
+            band = nla_nest_start(msg, NL80211_BAND_5GHZ);
+        }
+#else
         band = nla_nest_start(msg, NL80211_BAND_5GHZ);
+#endif
         break;
     case HOSTAPD_MODE_IEEE80211AD:
         band = nla_nest_start(msg, NL80211_BAND_60GHZ);
@@ -7374,6 +7397,10 @@ static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags,
         return -1;
 
     memset(&vht_rate, 0, sizeof(vht_rate));
+#if HOSTAPD_VERSION >= 210
+    memset(&he_rate, 0, sizeof(he_rate));
+#endif
+
     switch (params->rate_type) {
     case BEACON_RATE_LEGACY:
         if (!(flags & WPA_DRIVER_FLAGS_BEACON_RATE_LEGACY)) {
@@ -7421,7 +7448,18 @@ static int nl80211_put_beacon_rate(struct nl_msg *msg, const u64 flags,
         break;
 #if HOSTAPD_VERSION >= 210
     case BEACON_RATE_HE:
-        wifi_hal_dbg_print("nl80211: BEACON_RATE_HE received\n");
+        if (!(flags2 & WPA_DRIVER_FLAGS2_BEACON_RATE_HE)) {
+            wifi_hal_info_print("nl80211: Driver does not support setting Beacon frame rate (HE)");
+            return -1;
+        }
+        he_rate.mcs[0] = BIT(params->beacon_rate);
+        if (nla_put(msg, NL80211_TXRATE_LEGACY, 0, NULL) ||
+            nla_put(msg, NL80211_TXRATE_HT, 0, NULL) ||
+            nla_put(msg, NL80211_TXRATE_VHT, sizeof(vht_rate),
+                &vht_rate) ||
+            nla_put(msg, NL80211_TXRATE_HE, sizeof(he_rate), &he_rate))
+            return -1;
+        wifi_hal_dbg_print(" * beacon_rate = HE-MCS %u", params->beacon_rate);
         break;
 #endif
     default:
@@ -7591,6 +7629,7 @@ int set_bss_param(void *priv, struct wpa_driver_ap_params *params)
     return 0;
 }
 
+
 int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
 {
     struct nl_msg *msg;
@@ -7641,7 +7680,11 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
     if (params->beacon_int > 0) {
         nla_put_u32(msg, NL80211_ATTR_BEACON_INTERVAL, params->beacon_int);
     }
+#if HOSTAPD_VERSION < 210
     nl80211_put_beacon_rate(msg, drv->capa.flags, params);
+#else
+    nl80211_put_beacon_rate(msg, drv->capa.flags, drv->capa.flags2, params);
+#endif
     if (params->dtim_period > 0) {
         nla_put_u32(msg, NL80211_ATTR_DTIM_PERIOD, params->dtim_period);
     }
@@ -7693,6 +7736,9 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
         suites[num_suites++] = RSN_AUTH_KEY_MGMT_UNSPEC_802_1X;
     if (params->key_mgmt_suites & WPA_KEY_MGMT_PSK)
         suites[num_suites++] = RSN_AUTH_KEY_MGMT_PSK_OVER_802_1X;
+    if (params->key_mgmt_suites & WPA_KEY_MGMT_SAE)
+        suites[num_suites++] = RSN_AUTH_KEY_MGMT_SAE;
+
     if (num_suites) {
         nla_put(msg, NL80211_ATTR_AKM_SUITES, num_suites * sizeof(u32), suites);
     }
@@ -7755,10 +7801,34 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
         nla_put_u16(msg, NL80211_ATTR_INACTIVITY_TIMEOUT, params->ap_max_inactivity);
     }
 
+#if (HOSTAPD_VERSION >= 210) 
+#if defined (CONFIG_SAE)
+    if (params->key_mgmt_suites & WPA_KEY_MGMT_SAE) { 
+        u8 sae_pwe;
+
+        if (params->sae_pwe == 0) {
+            sae_pwe = NL80211_SAE_PWE_HUNT_AND_PECK;
+        } else if (params->sae_pwe == 1) {
+            sae_pwe = NL80211_SAE_PWE_HASH_TO_ELEMENT;
+        } else if (params->sae_pwe == 2) {
+            sae_pwe = NL80211_SAE_PWE_BOTH;
+        } else {
+            return -1;
+        }
+        if (nla_put_u8(msg, NL80211_ATTR_SAE_PWE, sae_pwe)) {
+            return -1;
+        }
+    }
+#endif /* CONFIG_SAE */
+#endif /* HOSTAPD_VERSION */
+
     get_coutry_str_from_code(radio_param->countryCode, country);
 
     if (beacon_set == 0) {
-        nl80211_fill_chandef(msg, radio, interface);
+        if (nl80211_fill_chandef(msg, radio, interface) == -1) {
+            wifi_hal_error_print("%s:%d: Failed nl80211_fill_chandef\n", __func__, __LINE__);
+            return -1;
+        }
     }
 
     ret = send_and_recv(msg, beacon_info_handler, &g_wifi_hal, NULL, NULL);
