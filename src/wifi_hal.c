@@ -38,20 +38,20 @@
 
 #define RADIO_INDEX_ASSERT_RC(radioIndex, retcode) \
     do { \
-        int index = (int)radioIndex; \
-        if ((index >= (MAX_NUM_RADIOS)) || (index < 0)) { \
+        int _index = (int)radioIndex; \
+        if ((_index >= (MAX_NUM_RADIOS)) || (_index < 0)) { \
             wifi_hal_error_print("%s: INCORRECT radioIndex = %d numRadios = %d\n", \
-                    __FUNCTION__, index, MAX_NUM_RADIOS); \
+                    __FUNCTION__, _index, MAX_NUM_RADIOS); \
             return retcode; \
         } \
     } while (0)
 
 #define AP_INDEX_ASSERT_RC(apIndex, retcode) \
     do { \
-        int index = (int)apIndex; \
-        if ((index >= (MAX_VAP)) || (index < 0)) { \
+        int _index = (int)apIndex; \
+        if ((_index >= (MAX_VAP)) || (_index < 0)) { \
             wifi_hal_error_print("%s, INCORRECT apIndex = %d MAX_VAP = %d\n", __FUNCTION__, \
-                            index, MAX_VAP); \
+                            _index, MAX_VAP); \
             return retcode; \
         } \
     } while (0)
