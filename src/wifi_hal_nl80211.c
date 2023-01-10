@@ -394,7 +394,11 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
 #ifdef WIFI_HAL_VERSION_3_PHASE2
         callbacks->mgmt_frame_rx_callback(vap->vap_index, &mgmt_frame);
 #else
+#if defined(RDK_ONEWIFI) && defined(TCXB7_PORT)
+        callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir, sig_dbm);
+#else
         callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir);
+#endif
 #endif
     }
 
