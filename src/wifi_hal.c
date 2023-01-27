@@ -777,6 +777,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                                          __func__, __LINE__, vap->vap_index);
                 return RETURN_ERR;
             }
+            wifi_hal_info_print("mac filter mode:%d apIndex:%d\n", filtermode, vap->vap_index);
         }
     }
 

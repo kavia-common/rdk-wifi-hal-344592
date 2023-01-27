@@ -5143,7 +5143,7 @@ int set_bss_param(void *priv, struct wpa_driver_ap_params *params)
         return -1;
     }
     nla_put_u8(msg, NL80211_ATTR_AP_ISOLATE, params->isolate);
-    wifi_hal_dbg_print("%s:%d: Set AP isolate:%d \r\n", __func__, __LINE__, params->isolate);
+    wifi_hal_info_print("Set AP isolate:%d \r\n", params->isolate);
     ret = send_and_recv(g_wifi_hal.nl_cb, g_wifi_hal.nl, msg, NULL, NULL, NULL, NULL);
     if (ret != 0) {
         wifi_hal_error_print("%s:%d: Failed to set bss for interface: %s error: %s\n", __func__, __LINE__, interface->name, strerror(-ret));

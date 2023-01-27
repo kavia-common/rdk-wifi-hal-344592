@@ -94,6 +94,10 @@ int platform_pre_init()
 {
     wifi_hal_dbg_print("%s:%d \r\n", __func__, __LINE__);
 
+    system("sysevent set multinet-up 13");
+    system("sysevent set multinet-up 14");
+    wifi_hal_info_print("sysevent sent to start mesh bridges\r\n");
+
 //    wlcsm_nvram_set("wl0_bw_cap", "3");
     /* registering the dummy callbacks to receive the events in plume */
     wifi_newApAssociatedDevice_callback_register(sta_associated);
@@ -159,7 +163,7 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     memset(param_name, 0 ,sizeof(param_name));
     memset(interface_name, 0, sizeof(interface_name));
 
-    wifi_hal_dbg_print("%s:%d: start_security_apps\n", __func__, __LINE__);
+    wifi_hal_info_print("%s:%d: start_security_apps\n", __func__, __LINE__);
     system("wifi_setup.sh start_security_apps");
 
     wifi_hal_dbg_print("%s:%d: add wifi interfaces to flow manager\r\n", __func__, __LINE__);
