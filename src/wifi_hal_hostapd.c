@@ -796,6 +796,8 @@ int update_hostap_bss(wifi_interface_info_t *interface)
 #endif
 #endif
     conf->bss_transition = vap->u.bss_info.bssTransitionActivated;
+    /*Enable Beacon passive , Beacon active and Beacon table support by default */
+    conf->radio_measurements[0] |=  (WLAN_RRM_CAPS_BEACON_REPORT_PASSIVE | WLAN_RRM_CAPS_BEACON_REPORT_ACTIVE | WLAN_RRM_CAPS_BEACON_REPORT_TABLE);
     if(vap->u.bss_info.nbrReportActivated) {
         conf->radio_measurements[0] |= WLAN_RRM_CAPS_NEIGHBOR_REPORT;
     }
