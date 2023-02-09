@@ -2752,7 +2752,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
     freq1 = freq;
     sec_chan_offset = get_sec_channel_offset(radio, freq);
 
-    wifi_hal_dbg_print("%s:%d Switch channel to %d in radio %d\n", __func__, __LINE__, param->channel, radio->index);
+    wifi_hal_info_print("%s:%d Switching channel to %d on radio %d\n", __func__, __LINE__, param->channel, radio->index);
 
     switch (param->channelWidth) {
     case WIFI_CHANNELBANDWIDTH_20MHZ:
@@ -2825,6 +2825,9 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
             }
 
             hostapd_switch_channel(&interface->u.ap.hapd, &csa_settings);
+#ifndef CMXB7_PORT
+            break;
+#endif
         }
         interface = hash_map_get_next(radio->interface_map, interface);
     }
@@ -3983,7 +3986,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
     nla_nest_end(msg, beacon_csa);
     ret = send_and_recv(g_wifi_hal.nl_cb, g_wifi_hal.nl, msg, NULL, NULL, NULL, NULL);
     if (ret) {
-        wifi_hal_info_print("nl80211: switch_channel failed err=%d (%s)", ret, strerror(-ret));
+        wifi_hal_info_print("nl80211: switch_channel failed err=%d (%s)\n", ret, strerror(-ret));
     }
     return ret;
 
@@ -3991,7 +3994,7 @@ fail:
     ret = -1;
 error:
     nlmsg_free(msg);
-    wifi_hal_error_print("nl80211: Could not build channel switch request");
+    wifi_hal_error_print("nl80211: Could not build channel switch request\n");
     return ret;
 }
 

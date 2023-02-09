@@ -340,11 +340,11 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
     }
     if ((set_radio_pre_init_fn = get_platform_set_radio_pre_init_fn()) != NULL) {
         if (set_radio_pre_init_fn(index, operationParam) < 0){
-            wifi_hal_dbg_print("%s:%d: Error in setting radio pre init\n", __func__, __LINE__);
+            wifi_hal_error_print("%s:%d: Error in setting radio pre init\n", __func__, __LINE__);
             return RETURN_ERR;
         }
     } else {
-        wifi_hal_dbg_print("%s:%d: Unable to fetch se_radio_pre_init_fn()\n", __func__, __LINE__);
+        wifi_hal_error_print("%s:%d: Unable to fetch se_radio_pre_init_fn()\n", __func__, __LINE__);
     }
 
     primary_interface = get_primary_interface(radio);
@@ -660,6 +660,8 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 continue;
             }
         }
+
+        wifi_hal_info_print("%s:%d: vap_index:%d name:%s\r\n",__func__, __LINE__, vap->vap_index, interface->name);
 
         if (vap->vap_mode == wifi_vap_mode_ap) {
             memcpy(vap->u.bss_info.bssid, interface->mac, sizeof(vap->u.bss_info.bssid));
