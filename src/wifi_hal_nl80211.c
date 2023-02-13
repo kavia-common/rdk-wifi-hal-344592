@@ -3669,7 +3669,10 @@ int nl80211_init_primary_interfaces()
 
     for (i = 0; i < g_wifi_hal.num_radios; i++) {
         radio = get_radio_by_rdk_index(i);
-
+        if (radio->radio_presence == false) {
+            wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+            continue;
+        }
         primary_interface = get_primary_interface(radio);
         if (primary_interface == NULL) {
             wifi_hal_error_print("%s:%d: Error updating dev:%d no primary interfaces exist\n", __func__, __LINE__, radio->index);
@@ -3708,6 +3711,11 @@ int nl80211_init_radio_info()
 
     for (i = 0; i < g_wifi_hal.num_radios; i++) {
         radio = &g_wifi_hal.radio_info[i];
+
+        if (radio->radio_presence == false) {
+           wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+           continue;
+        }
 
         // get information about phy
         msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_GET_WIPHY);

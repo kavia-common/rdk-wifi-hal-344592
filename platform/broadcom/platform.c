@@ -2,13 +2,27 @@
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
 #include "wlcsm_lib_api.h"
+#if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+#include <fcntl.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#endif // defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
 
 #define BUFFER_LENGTH_WIFIDB 256
 #define BUFLEN_128  128
+#define BUFLEN_256 256
 
 int sta_disassociated(int ap_index, char *mac, int reason);
 int sta_deauthenticated(int ap_index, char *mac, int reason);
 int sta_associated(int ap_index, wifi_associated_dev_t *associated_dev);
+#if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+static int check_edpdctl_enabled();
+static int check_dpd_feature_enabled();
+static int enable_echo_feature_and_power_control_configs(void);
+int platform_set_ecomode_for_radio(const int wl_idx, const bool eco_pwr_down);
+int platform_set_gpio_config_for_ecomode(const int wl_idx, const bool eco_pwr_down);
+#endif // defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
 
 static char const *bss_nvifname[] = {
     "wl0",      "wl1",
@@ -127,13 +141,58 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
     char param_name[NVRAM_NAME_SIZE];
     char cmd[BUFLEN_128];
     wifi_radio_info_t *radio;
-
     radio = get_radio_by_rdk_index(index);
     if (radio == NULL) {
         wifi_hal_dbg_print("%s:%d:Could not find radio index:%d\n", __func__, __LINE__, index);
         return RETURN_ERR;
     }
-    
+
+#if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+    int ret = 0;
+    if (operationParam->EcoPowerDown) {
+        /* Enable eco mode feature and power control configurations. */
+        ret = enable_echo_feature_and_power_control_configs();
+        if (ret != RETURN_OK) {
+            wifi_hal_error_print("%s:%d: Failed to enable EDPD ECO Mode feature\n", __func__, __LINE__);
+        }
+
+        //Enable ECO mode for radio
+        ret = platform_set_ecomode_for_radio(index, true);
+        if (ret != RETURN_OK) {
+           wifi_hal_dbg_print("%s:%d: Failed to enable ECO mode for radio index:%d\n", __func__, __LINE__, index);
+        }
+
+        //Disconnect the GPIO
+        ret = platform_set_gpio_config_for_ecomode(index, true);
+        if (ret != RETURN_OK) {
+            wifi_hal_dbg_print("%s:%d: Failed to disconnect gpio for radio index:%d\n", __func__, __LINE__, index);
+        }
+    } else {
+        /* Enable eco mode feature and power control configurations. */
+        ret = enable_echo_feature_and_power_control_configs();
+        if (ret != RETURN_OK) {
+            wifi_hal_error_print("%s:%d: Failed to enable EDPD ECO Mode feature\n", __func__, __LINE__);
+        }
+
+        //Connect the GPIO
+        ret = platform_set_gpio_config_for_ecomode(index, false);
+        if (ret != RETURN_OK) {
+            wifi_hal_dbg_print("%s:%d: Failed to connect gpio for radio index:%d\n", __func__, __LINE__, index);
+        }
+
+        //Disable ECO mode for radio
+        ret = platform_set_ecomode_for_radio(index, false);
+        if (ret != RETURN_OK) {
+            wifi_hal_dbg_print("%s:%d: Failed to disable ECO mode for radio index:%d\n", __func__, __LINE__, index);
+        }
+    }
+#endif // defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+
+    if (radio->radio_presence == false) {
+        wifi_hal_dbg_print("%s:%d Skip this radio %d. This is in sleeping mode\n", __FUNCTION__, __LINE__, index);
+        return 0;
+    }
+
     if (radio->oper_param.countryCode != operationParam->countryCode) {
         memset(temp_buff, 0 ,sizeof(temp_buff));
         get_coutry_str_from_code(operationParam->countryCode, temp_buff);
@@ -173,7 +232,6 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
             system(cmd);
         }
     }
-
     return 0;
 }
 
@@ -887,3 +945,333 @@ int platform_get_channel_bandwidth(wifi_radio_index_t index,  wifi_channelBandwi
     return 0;
 }
 
+int platform_update_radio_presence(void)
+{
+    char cmd[32] = {0};
+    unsigned int index = 0, value = 0;
+    wifi_radio_info_t *radio;
+    char buf[2] = {0};
+    FILE *fp = NULL;
+
+    wifi_hal_error_print("%s:%d: g_wifi_hal.num_radios %d\n", __func__, __LINE__, g_wifi_hal.num_radios);
+
+    for (index = 0; index < g_wifi_hal.num_radios; index++)
+    {
+       radio = get_radio_by_rdk_index(index);
+       snprintf(cmd, sizeof(cmd), "nvram kget wl%d_dpd", index);
+       if ((fp = popen(cmd, "r")) != NULL)
+       {
+           if (fgets(buf, sizeof(buf), fp) != NULL)
+           {
+               value = atoi(buf);
+               if (1 == value) {
+                   radio->radio_presence = false;
+               }
+               wifi_hal_info_print("%s:%d: Index %d edpd enable %d presence %d\n", __func__, __LINE__, index, value, radio->radio_presence);
+           }
+           pclose(fp);
+       }
+    }
+    return 0;
+}
+
+#if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+/* EDPD - WLAN Power down control support APIs. */
+#define GPIO_PIN_24G_RADIO 101
+#define GPIO_PIN_5G_RADIO 102
+#define GPIO_EXPORT_PATH "/sys/class/gpio/export"
+#define GPIO_UNEXPORT_PATH "/sys/class/gpio/unexport"
+#define GPIO_DIRECTION_PATH "/sys/class/gpio/gpio%d/direction"
+#define GPIO_VALUE_PATH "/sys/class/gpio/gpio%d/value"
+#define ECOMODE_SCRIPT_FILE "/etc/sky/wifi.sh"
+#define GPIO_DIRECTION_OUT "out"
+#define BUFLEN_2 2
+
+/**
+ * @brief Enable EDPD ECO mode  feature control configuration
+ */
+static int enable_echo_feature_and_power_control_configs(void)
+{
+    if (check_edpdctl_enabled() && check_dpd_feature_enabled()) {
+        wifi_hal_dbg_print("%s:%d: EDPD feature enabled in CPE\n", __func__, __LINE__);
+        return RETURN_OK;
+    }
+
+    char cmd[BUFLEN_256] = {0};
+    int rc = 0;
+
+    snprintf(cmd, sizeof(cmd), "nvram kset wl_edpdctl_enable=1;nvram kcommit;nvram set wl_edpdctl_enable=1;nvram commit;sync");
+    rc = system(cmd);
+    if (rc == 0) {
+        wifi_hal_dbg_print("%s:%d cmd [%s] successful \n", __func__, __LINE__, cmd);
+    } else {
+        wifi_hal_dbg_print("%s:%d cmd [%s] unsuccessful \n", __func__, __LINE__, cmd);
+    }
+
+    snprintf(cmd, sizeof(cmd), " /etc/sky/wifi.sh dpden 1");
+    rc = system(cmd);
+    if (rc == 0) {
+        wifi_hal_dbg_print("%s:%d cmd [%s] successful \n", __func__, __LINE__, cmd);
+    } else {
+        wifi_hal_dbg_print("%s:%d cmd [%s] unsuccessful \n", __func__, __LINE__, cmd);
+    }
+
+    return rc;
+}
+
+/**
+ * @brief API to check DPD feature enabled in CPE.
+ *
+ * @return int - Return 1 if feature enabled else returns 0.
+ */
+static int check_dpd_feature_enabled(void)
+{
+    FILE *fp = NULL;
+    int dpd_mode = 0;
+    char cmd[BUFLEN_128] = {0};
+    char buf[BUFLEN_2] = {0};
+
+    snprintf(cmd, sizeof(cmd), "%s dpden",
+             ECOMODE_SCRIPT_FILE);
+    if ((fp = popen(cmd, "r")) != NULL)
+    {
+        if (fgets(buf, sizeof(buf), fp) != NULL)
+        {
+            dpd_mode = atoi(buf);
+        }
+        pclose(fp);
+    }
+
+    wifi_hal_dbg_print("%s:%d DPD Feature is %s!!! \n", __func__, __LINE__, (dpd_mode ? "enabled" : "disabled"));
+    return dpd_mode;
+}
+
+/**
+ * @brief API to check EDPD control enabled in CPE.
+ *
+ * @return int - Return 1 if feature enabled else returns 0.
+ */
+static int check_edpdctl_enabled()
+{
+    FILE *fp = NULL;
+    int edpd_status = 0;
+    char cmd[BUFLEN_128] = {0};
+    char buf[BUFLEN_2] = {0};
+
+    snprintf(cmd, sizeof(cmd), "nvram kget wl_edpdctl_enable");
+    if ((fp = popen(cmd, "r")) != NULL)
+    {
+        if (fgets(buf, sizeof(buf), fp) != NULL)
+        {
+            edpd_status = atoi(buf);
+        }
+        pclose(fp);
+    }
+
+    wifi_hal_dbg_print("%s:%d EDPD Power control is %s!!! \n", __func__, __LINE__, (edpd_status ? "enabled" : "disabled"));
+
+    return edpd_status;
+}
+
+/**
+ * @brief API to export GPIO Pin.
+ *
+ * @param pin - GPIO pin number
+ * @return int - RETURN_OK upon successful, RETURN_ERR upon error
+ */
+static int export_gpio(const int pin)
+{
+    int fd = open(GPIO_EXPORT_PATH, O_WRONLY);
+    if (fd < 0)
+    {
+        wifi_hal_error_print("%s:%d  Unable to open GPIO export file", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+    char buffer[BUFLEN_128] = {0};
+    int len = snprintf(buffer, sizeof(buffer), "%d", pin);
+    if (write(fd, buffer, len) != len)
+    {
+        wifi_hal_error_print("%s:%d  Unable to export GPIO%d!!! \n", __func__, __LINE__, pin);
+        close(fd);
+        return RETURN_ERR;
+    }
+    close(fd);
+
+    wifi_hal_dbg_print("%s:%d Exported GPIO %d!!!\n", __func__, __LINE__, pin);
+    return RETURN_OK;
+}
+
+/**
+ * @brief API to unexport GPIO Pin.
+ *
+ * @param pin - GPIO pin number
+ * @return int - 0 upon successful, -1 upon error
+ */
+static int unexport_gpio(const int pin)
+{
+    int fd = open(GPIO_UNEXPORT_PATH, O_WRONLY);
+    if (fd < 0)
+    {
+        wifi_hal_error_print("%s:%d  Unable to open GPIO unexport file \n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+    char buffer[BUFLEN_128] = {0};
+    int len = snprintf(buffer, sizeof(buffer), "%d", pin);
+    if (write(fd, buffer, len) != len)
+    {
+        wifi_hal_error_print("%s:%d  Unable to unexport GPIO%d!!! \n", __func__, __LINE__,pin);
+        close(fd);
+        return RETURN_ERR;
+    }
+    close(fd);
+    wifi_hal_dbg_print("%s:%d  Unexported GPIO %d!!!\n", __func__, __LINE__, pin);
+
+    return RETURN_OK;
+}
+/**
+ * @brief API to set GPIO Pin direction.
+ *
+ * @param pin - GPIO pin number
+ * @param direction - GPIO direction either "out" or "in"
+ * @return int - RETURN_OK upon successful, RETURN_ERR upon error
+ */
+static int set_gpio_direction(const int pin, const char *direction)
+{
+    char path[BUFLEN_128] = {0};
+    snprintf(path, sizeof(path), GPIO_DIRECTION_PATH, pin);
+    int fd = open(path, O_WRONLY);
+    if (fd < 0)
+    {
+        perror("Unable to open GPIO direction file");
+        return RETURN_ERR;
+    }
+    if (write(fd, direction, strlen(direction)) != (int)strlen(direction))
+    {
+        wifi_hal_error_print("%s:%d Unable to set GPIO direction \n", __func__, __LINE__);
+        close(fd);
+        return RETURN_ERR;
+    }
+    close(fd);
+    wifi_hal_dbg_print("%s:%d Set GPIO %d direction to %s. \n", __func__, __LINE__, pin, direction);
+
+    return RETURN_OK;
+}
+
+/**
+ * @brief API to write value to gpio pin
+ *
+ * @param pin - GPIO pin number
+ * @param value - value could be either 1 or 0
+ * @return int - RETURN_OK upon successful, RETURN_ERR upon error
+ */
+static int write_gpio_value(int pin, int value)
+{
+    char path[BUFLEN_128] = {0};
+    snprintf(path, sizeof(path), GPIO_VALUE_PATH, pin);
+    int fd = open(path, O_WRONLY);
+    if (fd < 0)
+    {
+        perror("Unable to open GPIO value file");
+        return RETURN_ERR;
+    }
+    if (write(fd, value ? "1" : "0", 1) != 1)
+    {
+        wifi_hal_error_print("%s:%d Unable to write GPIO value \n", __func__, __LINE__);
+        close(fd);
+        return RETURN_ERR;
+    }
+    close(fd);
+    wifi_hal_dbg_print("%s:%d Write value %d on GPIO %d \n", __func__, __LINE__, value, pin);
+    return RETURN_OK;
+}
+
+/**
+ * @brief Set the gpio configuration for eco mode
+ *
+ * @description Once we put the board in eco mode, we must need to disconnect
+ * power from soc chip from wlan chip. Its using change GPIO configuration.
+ * @param wl_idx  - Radio index
+ * @param eco_pwr_down - Indicate power down or up radio
+ * @return int - 0 on success , -1 on error
+ */
+int platform_set_gpio_config_for_ecomode(const int wl_idx, const bool eco_pwr_down)
+{
+    if (!check_edpdctl_enabled() && !check_dpd_feature_enabled())
+    {
+        wifi_hal_error_print("%s:%d  EDPD Feature control configuration NOT enabled\n", __func__, __LINE__);
+        return -1;
+    }
+
+    int gpio_pin = (wl_idx == 0) ? GPIO_PIN_24G_RADIO : GPIO_PIN_5G_RADIO;
+    int value = (eco_pwr_down) ? 1 : 0;
+    int rc = 0;
+
+    rc = export_gpio(gpio_pin);
+    if (rc != RETURN_OK)
+    {
+        wifi_hal_error_print("%s:%d Failed to export gpio %d \n", __func__, __LINE__, gpio_pin);
+        goto EXIT;
+    }
+
+    rc = set_gpio_direction(gpio_pin, GPIO_DIRECTION_OUT);
+    if (rc != RETURN_OK)
+    {
+        wifi_hal_dbg_print("%s:%d Failed to set direction for gpio %d \n", __func__, __LINE__, gpio_pin);
+        goto EXIT;
+    }
+
+    rc = write_gpio_value(gpio_pin, value);
+    if (rc != RETURN_OK)
+    {
+        wifi_hal_error_print("%s:%d Failed to set value for gpio %d \n", __func__, __LINE__, gpio_pin);
+        goto EXIT;
+    }
+
+    unexport_gpio(gpio_pin);
+
+    wifi_hal_dbg_print("%s:%d For wl%d, configured the gpio to %s the PCIe interface \n", __func__, __LINE__, wl_idx, (eco_pwr_down ? "power down" : "power up"));
+EXIT:
+    return rc;
+}
+
+/**
+ * @brief Set the ecomode for radio object
+ *
+ * @description To make enable or disable eco mode, we are using broadcom
+ * single control wifi.sh script.
+ * @param wl_idx  - Radio index
+ * @param eco_pwr_down - Indicate power down or up radio
+ * @return int - 0 on success , -1 on error
+ */
+int platform_set_ecomode_for_radio(const int wl_idx, const bool eco_pwr_down)
+{
+    if (!check_edpdctl_enabled() && !check_dpd_feature_enabled())
+    {
+        wifi_hal_error_print("%s:%d  EDPD Feature control configuration NOT enabled\n", __func__, __LINE__);
+        return -1;
+    }
+
+    char cmd[BUFLEN_128] = {0};
+    int rc = 0;
+
+    /* Put radio into eco mode (power down) */
+    if (eco_pwr_down)
+        snprintf(cmd, sizeof(cmd), "sh %s edpddn wl%d",
+                 ECOMODE_SCRIPT_FILE, wl_idx);
+    else
+        snprintf(cmd, sizeof(cmd), "sh %s edpdup wl%d",
+                 ECOMODE_SCRIPT_FILE, wl_idx);
+
+    rc = system(cmd);
+    if (rc == 0)
+    {
+        wifi_hal_dbg_print("%s:%d cmd [%s] successful \n", __func__, __LINE__, cmd);
+    }
+    else
+    {
+        wifi_hal_error_print("%s:%d cmd [%s] unsuccessful \n", __func__, __LINE__, cmd);
+    }
+
+    return rc;
+}
+#endif // defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)

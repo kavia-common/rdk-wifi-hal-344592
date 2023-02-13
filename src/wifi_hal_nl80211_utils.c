@@ -214,7 +214,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
 
 #ifdef TCXB7_PORT // for Broadcom based platforms
@@ -236,7 +237,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
 
 #ifdef TCXB8_PORT // for Broadcom based platforms
@@ -258,7 +260,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
 
 #ifdef CMXB7_PORT
@@ -280,7 +283,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
 
 #ifdef XLE_PORT // for Broadcom XLE
@@ -302,7 +306,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
 
 #ifdef SKYSR213_PORT // for Broadcom HUB6
@@ -324,7 +329,8 @@ const wifi_driver_info_t  driver_info = {
     platform_flags_init,
     platform_get_aid,
     platform_free_aid,
-    platform_sync_done
+    platform_sync_done,
+    platform_update_radio_presence
 #endif
     
 };
@@ -2239,6 +2245,11 @@ platform_sync_done_t get_platform_sync_done_fn()
     return driver_info.platform_sync_done_fn;
 }
 
+platform_update_radio_presence_t get_platform_update_radio_presence_fn()
+{
+    return driver_info.platform_update_radio_presence_fn;
+}
+
 bool lsmod_by_name(const char *name)
 {
     FILE *fp = NULL;
@@ -2258,4 +2269,137 @@ bool lsmod_by_name(const char *name)
     fclose(fp);
 
     return false;
+}
+
+void update_ecomode_radio_capabilities(wifi_radio_info_t *radio)
+{
+    wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
+    unsigned int channels_2_4g[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+    unsigned int channels_5g[] = {36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 132, 136, 140, 144, 149, 153, 157, 161, 165};
+    unsigned int channels_6g[] = {5, 21, 37, 53, 69, 85, 101, 117, 133, 149, 165, 181, 197, 213, 229};
+
+    if (radio == NULL) {
+       wifi_hal_error_print("%s:%d: Failed in updating the eco mode radio capabilities\n", __func__, __LINE__);
+       return;
+    }
+
+    radio->capab.index = radio->index;
+    sprintf(radio->capab.ifaceName, "%s", radio->name);
+    radio->capab.numSupportedFreqBand = 1;
+
+    interface = hash_map_get_first(radio->interface_map);
+
+    if (interface != NULL) {
+        vap = &interface->vap_info;
+        if (strstr(vap->vap_name, "2g") != NULL) {
+            radio->oper_param.band = WIFI_FREQUENCY_2_4_BAND;
+        } else if (strstr(vap->vap_name, "5g") != NULL) {
+            radio->oper_param.band = WIFI_FREQUENCY_5_BAND;
+        } else if (strstr(vap->vap_name, "6g") != NULL) {
+            radio->oper_param.band = WIFI_FREQUENCY_6_BAND;
+        } else {
+            wifi_hal_error_print("%s:%d: Failed in updating frequency band for the eco mode radio\n", __func__, __LINE__);
+            return;
+        }
+    }
+
+    switch (radio->oper_param.band)
+    {
+        case WIFI_FREQUENCY_2_4_BAND:
+            radio->capab.band[0] = WIFI_FREQUENCY_2_4_BAND;
+            radio->capab.channel_list[0].num_channels = ARRAY_SZ(channels_2_4g);
+            memcpy(radio->capab.channel_list[0].channels_list, channels_2_4g, sizeof(channels_2_4g));
+            break;
+        case WIFI_FREQUENCY_5_BAND:
+            radio->capab.band[0] = WIFI_FREQUENCY_5_BAND;
+            radio->capab.channel_list[0].num_channels = ARRAY_SZ(channels_5g);
+            memcpy(radio->capab.channel_list[0].channels_list, channels_5g, sizeof(channels_5g));
+            break;
+        case WIFI_FREQUENCY_6_BAND:
+            radio->capab.band[0] = WIFI_FREQUENCY_6_BAND;
+            radio->capab.channel_list[0].num_channels = ARRAY_SZ(channels_6g);
+            memcpy(radio->capab.channel_list[0].channels_list, channels_6g, sizeof(channels_6g));
+            break;
+        default:
+            wifi_hal_error_print("%s:%d: Frequency band not defined\n", __func__, __LINE__);
+            break;
+    }
+}
+
+int create_ecomode_interfaces(void)
+{
+    uint8_t radioIndex;
+
+    for (radioIndex = 0; radioIndex < ARRAY_SZ(l_radio_interface_map); radioIndex++)
+    {
+        int found = 0, j;
+        wifi_radio_info_t *radio;
+        for (j = 0; j < g_wifi_hal.num_radios; j++) {
+           radio = &g_wifi_hal.radio_info[j];
+           if (NULL == radio) {
+               wifi_hal_error_print("%s:%d: Failed in creating eco mode interfaces\n", __func__, __LINE__);
+               return -1;
+           }
+           if (radio->rdk_radio_index == l_radio_interface_map[radioIndex].radio_index) {
+               //Radio interface not in ECO mode [Added already in g_wifi_hal.radio_info after notification from driver]
+               found = 1;
+               radio->radio_presence = true;
+               wifi_hal_dbg_print("%s:%d: Found ECO Active mode radio , coming out\n", __func__, __LINE__);
+               break;
+           }
+        }
+
+        if (!found) {
+          wifi_hal_dbg_print("%s:%d: Set up things for the ECO Sleeping mode radio\n", __func__, __LINE__);
+          radio = &g_wifi_hal.radio_info[g_wifi_hal.num_radios];
+          memset((unsigned char *)radio, 0, sizeof(wifi_radio_info_t));
+          radio->radio_presence = false;
+          radio->index =  l_radio_interface_map[radioIndex].radio_index; // Random index values causes set_interface_properties failing in update vap info
+          radio->rdk_radio_index = l_radio_interface_map[radioIndex].radio_index;
+          radio->capab.index = radio->index;
+          sprintf(radio->name, "%s", l_radio_interface_map[radioIndex].radio_name);
+          g_wifi_hal.num_radios++;
+          radio->capab.maxNumberVAPs = 0;
+          radio->interface_map = hash_map_create();
+
+          //Add interfaces to the Sleeping radio
+          int vapIndex;
+          wifi_vap_info_t *vap = NULL;
+
+          for (vapIndex = 0; vapIndex < ARRAY_SZ(interface_index_map); vapIndex++)
+          {
+             wifi_interface_info_t *interface = NULL;
+              wifi_hal_dbg_print("%s:%d: Process %s  vap interface to add to the radio\n", __func__, __LINE__, interface_index_map[vapIndex].interface_name);
+              if (interface_index_map[vapIndex].rdk_radio_index != l_radio_interface_map[radioIndex].radio_index) {
+                 continue;
+              }
+
+              interface = (wifi_interface_info_t *)malloc(sizeof(wifi_interface_info_t));
+              if (interface == NULL) {
+                  wifi_hal_dbg_print("%s:%d: malloc failed! Continue\n", __func__, __LINE__);
+                  continue;
+              }
+              memset(interface, 0, sizeof(wifi_interface_info_t));
+              interface->phy_index = radio->index;
+              interface->index = interface_index_map[vapIndex].index;
+              sprintf(interface->name, "%s", interface_index_map[vapIndex].interface_name);
+              if (set_interface_properties(interface->phy_index , interface) != 0) {
+                  wifi_hal_info_print("%s:%d: Could not map interface name to index:%d\n", __func__, __LINE__, interface->phy_index);
+              }
+              vap = &interface->vap_info;
+              wifi_hal_dbg_print("%s:%d: phy index: %d\tradio index: %d\tinterface index: %d name: %s  type:%d, mac:%02x:%02x:%02x:%02x:%02x:%02x vap index: %d vap name: %s\n",
+                                 __func__, __LINE__,radio->index, vap->radio_index, interface->index, interface->name, interface->type,interface->mac[0], interface->mac[1],
+                                 interface->mac[2],interface->mac[3], interface->mac[4], interface->mac[5],vap->vap_index, vap->vap_name);
+              hash_map_put(radio->interface_map, strdup(interface->name), interface);
+              radio->capab.maxNumberVAPs++;
+
+              wifi_hal_dbg_print("%s:%d: Fetch next interface after the radio interface hash map [%s]\n", __func__, __LINE__, interface->name);
+           }
+           // Build the sleeping radio capabilities manually based on the available info in the 'radio' to bringup webconfig,  Device.WiFi.**
+           update_ecomode_radio_capabilities(radio);
+       }
+    }
+    wifi_hal_dbg_print("\n%s:%d: Number of radios %d\n", __func__, __LINE__, g_wifi_hal.num_radios);
+    return 0;
 }

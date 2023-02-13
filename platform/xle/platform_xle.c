@@ -275,3 +275,8 @@ int platform_get_channel_bandwidth(wifi_radio_index_t index,  wifi_channelBandwi
 {
     return 0;
 }
+
+int platform_update_radio_presence(void)
+{
+    return 0;
+}

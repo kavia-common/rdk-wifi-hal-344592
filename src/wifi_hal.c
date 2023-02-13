@@ -94,7 +94,7 @@ INT wifi_hal_getHalCapability(wifi_hal_capability_t *hal)
         is_band_found = false;
         radio = get_radio_by_rdk_index(i);
         wifi_hal_info_print("%s:%d:Enumerating interfaces on PHY radio index: %d, RDK radio index:%d\n", __func__, __LINE__, radio->index, i);
-
+        hal->wifi_prop.radio_presence[i] = radio->radio_presence;
         interface = hash_map_get_first(radio->interface_map);
         while (interface != NULL) {
             vap = &interface->vap_info;
@@ -179,6 +179,10 @@ INT wifi_hal_init()
         return RETURN_ERR;
     }
 
+    if (create_ecomode_interfaces() != 0) {
+        wifi_hal_error_print("%s:%d: Failed to create the ECO mode interfaces\n", __func__, __LINE__);
+    }
+
     if (nl80211_init_primary_interfaces() != 0) {
         return RETURN_ERR;
     }
@@ -206,6 +210,10 @@ INT wifi_hal_init()
 
     for (i = 0; i < g_wifi_hal.num_radios; i++) {
         radio = get_radio_by_rdk_index(i);
+        if (radio->radio_presence == false) {
+            wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+            continue;
+        }
         if(update_hostap_interfaces(radio) != RETURN_OK) {
             return RETURN_ERR;
         }
@@ -367,6 +375,11 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
         }
     } else {
         wifi_hal_error_print("%s:%d: Unable to fetch se_radio_pre_init_fn()\n", __func__, __LINE__);
+    }
+
+    if ((false == radio->radio_presence) || (operationParam->EcoPowerDown == true)) {
+        wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+        return RETURN_OK;
     }
 
     primary_interface = get_primary_interface(radio);
@@ -675,6 +688,11 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     if (radio == NULL) {
         wifi_hal_error_print("%s:%d:Could not find radio index:%d\n", __func__, __LINE__, index);
         return RETURN_ERR;
+    }
+
+    if (false == radio->radio_presence) {
+       wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+       return RETURN_OK;
     }
 
     if ((pre_set_vap_params_fn = get_platform_pre_create_vap_fn()) != NULL) {

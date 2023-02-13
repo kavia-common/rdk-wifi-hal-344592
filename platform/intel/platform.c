@@ -710,3 +710,8 @@ int platform_get_radius_key_default(char *radius_key)
 {
     return -1;
 }
+
+int platform_update_radio_presence(void)
+{
+    return 0;
+}

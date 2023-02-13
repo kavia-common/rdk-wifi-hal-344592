@@ -363,6 +363,7 @@ typedef struct {
     bool configured;
     unsigned int  prev_channel;
     unsigned int  prev_channelWidth;
+    bool radio_presence; //True for ECO mode Active radio, false for ECO mode power down sleeping radio
 } wifi_radio_info_t;
 
 typedef enum {
@@ -414,6 +415,7 @@ typedef int    (* platform_flags_init_t)(int *flags);
 typedef int    (* platform_get_aid_t)(void* priv, u16* aid, const u8* addr);
 typedef int    (* platform_free_aid_t)(void* priv, u16* aid);
 typedef int    (* platform_sync_done_t)(void* priv);
+typedef int    (* platform_update_radio_presence_t)();
 
 typedef struct {
     char        *device_name;
@@ -447,6 +449,7 @@ typedef struct {
     platform_get_aid_t                platform_get_aid_fn;
     platform_free_aid_t               platform_free_aid_fn;
     platform_sync_done_t              platform_sync_done_fn;
+    platform_update_radio_presence_t  platform_update_radio_presence_fn;
 } wifi_driver_info_t;
 
 INT wifi_hal_init();
@@ -490,6 +493,8 @@ wifi_interface_info_t* get_private_vap_interface(wifi_radio_info_t *radio);
 int nl80211_init_primary_interfaces();
 int nl80211_init_radio_info();
 int getIpStringFromAdrress(char * ipString,  ip_addr_t * ip);
+int create_ecomode_interfaces(void);
+void update_ecomode_radio_capabilities(wifi_radio_info_t *radio);
 
 int     init_nl80211();
 void    wifi_hal_nl80211_wps_pbc(unsigned int ap_index);
@@ -639,6 +644,8 @@ extern int platform_flags_init(int *flags);
 extern int platform_get_aid(void* priv, u16* aid, const u8* addr);
 extern int platform_free_aid(void* priv, u16* aid);
 extern int platform_sync_done(void* priv);
+extern int platform_update_radio_presence(void);
+
 platform_pre_init_t     	get_platform_pre_init_fn();
 platform_post_init_t    	get_platform_post_init_fn();
 platform_keypassphrase_default_t     get_platform_keypassphrase_default_fn();
@@ -655,6 +662,7 @@ platform_flags_init_t               get_platform_flags_init_fn();
 platform_get_aid_t                  get_platform_get_aid_fn();
 platform_free_aid_t                 get_platform_free_aid_fn();
 platform_sync_done_t                get_platform_sync_done_fn();
+platform_update_radio_presence_t    get_platform_update_radio_presence_fn();
 
 INT wifi_hal_wps_event(wifi_wps_event_t data);
 INT wifi_hal_get_default_wps_pin(char *pin);
