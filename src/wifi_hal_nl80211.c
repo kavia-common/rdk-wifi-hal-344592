@@ -4103,6 +4103,11 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
         return -1;
     }
 
+    if (!radio->configured) {
+        nl80211_enable_ap(interface, false);
+        wifi_hal_dbg_print("%s:%d: Radio is not configured, set beacon to 0 for %s\n", __func__, __LINE__, interface->name);
+    }
+
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_SET_WIPHY);
     nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index);
     nl80211_fill_chandef(msg, radio, interface);

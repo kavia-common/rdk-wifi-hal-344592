@@ -2,6 +2,7 @@
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
 #include "secure_wrapper.h"
+#include "wlcsm_lib_api.h"
 
 #define BUFFER_LENGTH_WIFIDB 256
 
@@ -82,6 +83,10 @@ int platform_pre_init()
 int platform_post_init(wifi_vap_info_map_t *vap_map)
 {
     wifi_hal_dbg_print("%s \n", __func__);
+
+    wifi_hal_info_print("%s:%d: start_security_apps\n", __func__, __LINE__);
+    v_secure_system("wifi_setup.sh start_security_apps");
+
     return 0;
 }
 
@@ -248,6 +253,32 @@ int nvram_get_current_ssid(char *l_ssid, int vap_index)
 
 int platform_pre_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 {
+    char interface_name[10];
+    char param[128];
+    wifi_vap_info_t *vap;
+    unsigned int vap_itr = 0;
+
+    for (vap_itr=0; vap_itr < map->num_vaps; vap_itr++) {
+        memset(interface_name, 0, sizeof(interface_name));
+        memset(param, 0, sizeof(param));
+        vap = &map->vap_array[vap_itr];
+        get_interface_name_from_vap_index(vap->vap_index, interface_name);
+        snprintf(param, sizeof(param), "%s_bss_enabled", interface_name);
+        if (vap->vap_mode == wifi_vap_mode_ap) {
+            if (vap->u.bss_info.enabled) {
+                wlcsm_nvram_set(param, "1");
+            } else {
+                wlcsm_nvram_set(param, "0");
+            }
+        } else if (vap->vap_mode == wifi_vap_mode_sta) {
+            if (vap->u.sta_info.enabled) {
+                wlcsm_nvram_set(param, "1");
+            } else {
+                wlcsm_nvram_set(param, "0");
+            }
+        }
+    }
+
     return 0;
 }
 
