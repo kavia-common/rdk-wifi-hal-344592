@@ -530,6 +530,87 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
 
 }
 
+#ifdef CMXB7_PORT
+/******************************************************************************/
+/*! \brief      Handle Flush station event from driver
+ *
+ *  \param[in]  hapd     pointer to hostapd_data
+ *  \param[in]  data     pointer to data
+ *  \param[in]  len      data size, 0 or 4 bytes
+ *
+ *  \note       \a hapd is not NULL
+ *  \note       if \a len is 0, will flush all STAs, if 4, will flush STAs on BSS of index provided in \a data
+ *
+ *  \return     void
+ */
+static void ltq_nl80211_handle_flush_stations(struct hostapd_data *hapd,
+                             const u8 *data, size_t len)
+{
+    wifi_hal_dbg_print("%s:%d: nl80211: Receive LTQ vendor event:Flush Stations\n",  __func__, __LINE__);
+    drv_event_ltq_flush_stations(hapd, data, len);
+}
+
+/******************************************************************************/
+/*! \brief      Handle Intel vendor events from driver
+ *
+ *  \param[in]  interface pointer to wifi_interface_info_t
+ *  \param[in]  subcmd   Sub command ID, must be from 'enum ltq_nl80211_vendor_events'
+ *  \param[in]  data     pointer to data
+ *  \param[in]  len      data size, variable size
+ *
+ *  \note       \a interface is not NULL
+ *
+ *  \return     void
+ */
+static void nl80211_vendor_event_ltq(wifi_interface_info_t *interface,
+                    u32 subcmd, u8 *data, size_t len)
+{
+    struct hostapd_data *hapd = &interface->u.ap.hapd;
+    switch (subcmd) {
+        case LTQ_NL80211_VENDOR_EVENT_FLUSH_STATIONS:
+            ltq_nl80211_handle_flush_stations(hapd, data, len);
+            break;
+        default:
+            wifi_hal_dbg_print("%s:%d: nl80211: Ignore unsupported LTQ vendor event %u\n",  __func__, __LINE__, subcmd);
+            break;
+    }
+}
+#endif // CMXB7_PORT
+
+static void nl80211_vendor_event(wifi_interface_info_t *interface,
+                    struct nlattr **tb)
+{
+    u32 vendor_id, subcmd, wiphy = 0;
+#ifdef CMXB7_PORT
+    u8 *data = NULL;
+    size_t len = 0;
+#endif
+
+    if (!tb[NL80211_ATTR_VENDOR_ID] ||
+        !tb[NL80211_ATTR_VENDOR_SUBCMD])
+        return;
+
+    vendor_id = nla_get_u32(tb[NL80211_ATTR_VENDOR_ID]);
+    subcmd = nla_get_u32(tb[NL80211_ATTR_VENDOR_SUBCMD]);
+
+    if (tb[NL80211_ATTR_WIPHY])
+        wiphy = nla_get_u32(tb[NL80211_ATTR_WIPHY]);
+
+    wifi_hal_dbg_print("%s:%d: nl80211: Vendor event: wiphy=%u vendor_id=0x%x subcmd=%u\n",
+            __func__, __LINE__, wiphy, vendor_id, subcmd);
+
+    switch (vendor_id) {
+#ifdef CMXB7_PORT
+    case OUI_LTQ:
+        nl80211_vendor_event_ltq(interface, subcmd, data, len);
+        break;
+#endif // CMXB7_PORT
+    default:
+        wifi_hal_dbg_print("%s:%d: nl80211: Ignore unsupported vendor event\n", __func__, __LINE__);
+        break;
+    }
+}
+
 static void do_process_drv_event(wifi_interface_info_t *interface, int cmd, struct nlattr **tb)
 {
     switch (cmd) {
@@ -558,6 +639,10 @@ static void do_process_drv_event(wifi_interface_info_t *interface, int cmd, stru
 
     case NL80211_CMD_RADAR_DETECT:
         nl80211_ch_switch_notify_event(interface, tb, WIFI_EVENT_DFS_RADAR_DETECTED);
+        break;
+
+    case NL80211_CMD_VENDOR:
+        nl80211_vendor_event(interface, tb);
         break;
 
    default:
