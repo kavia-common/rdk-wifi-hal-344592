@@ -396,6 +396,22 @@ static void nl80211_disconnect_event(wifi_interface_info_t *interface, struct nl
 
 }
 
+bool is_channel_supported_on_radio(wifi_freq_bands_t l_band, unsigned int channel)
+{
+    if ((l_band == WIFI_FREQUENCY_2_4_BAND) && (channel >= 1) && (channel <= 14)) {
+        return true;
+    } else if (((l_band == WIFI_FREQUENCY_5L_BAND) || (l_band == WIFI_FREQUENCY_5H_BAND) || (l_band == WIFI_FREQUENCY_5_BAND))
+                    && (channel >= 36) && (channel <= 169)) {
+        return true;
+    } else if ((l_band == WIFI_FREQUENCY_6_BAND) && (channel >= 1) && (channel <= 233)) {
+        return true;
+    } else if (l_band == WIFI_FREQUENCY_60_BAND) {
+        return true;
+    }
+
+    return false;
+}
+
 static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, struct nlattr **tb, wifi_chan_eventType_t wifi_chan_event_type)
 {
     int ifidx = 0, freq = 0, bw = NL80211_CHAN_WIDTH_20_NOHT, cf1 = 0, cf2 = 0;
@@ -465,6 +481,13 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
     wifi_radio_operationParam_t *radio_param;
     wifi_radio_operationParam_t tmp_radio_param;
     radio_param = &radio->oper_param;
+
+    if (is_channel_supported_on_radio(radio_param->band, channel) != true) {
+        wifi_hal_error_print("%s:%d: channel:%d and radio index:%d radio_band:%d not Compatible\n", __func__, __LINE__,
+                                    channel, interface->vap_info.radio_index, radio_param->band);
+        return;
+    }
+
 
     switch (bw) {
     case NL80211_CHAN_WIDTH_20:
