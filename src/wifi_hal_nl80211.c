@@ -8165,7 +8165,12 @@ int     wifi_drv_set_key(const char *ifname, void *priv, enum wpa_alg alg,
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, interface, 0, NL80211_CMD_SET_KEY);
 
     nla_put_u8(msg, NL80211_ATTR_KEY_IDX, key_idx);
-    nla_put_flag(msg, NL80211_ATTR_KEY_DEFAULT);
+    nla_put_flag(msg, (alg == WPA_ALG_IGTK ||
+                alg == WPA_ALG_BIP_GMAC_128 ||
+                alg == WPA_ALG_BIP_GMAC_256 ||
+                alg == WPA_ALG_BIP_CMAC_256) ?
+            NL80211_ATTR_KEY_DEFAULT_MGMT :
+            NL80211_ATTR_KEY_DEFAULT);
 
     if (addr && is_broadcast_ether_addr(addr)) {
         struct nlattr *types;
@@ -8241,7 +8246,17 @@ int     wifi_drv_set_key(const char *ifname, void *priv, enum wpa_alg alg,
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, interface, 0, NL80211_CMD_SET_KEY);
 
     nla_put_u8(msg, NL80211_ATTR_KEY_IDX, params->key_idx);
-    nla_put_flag(msg, NL80211_ATTR_KEY_DEFAULT);
+#if defined(TCXB7_PORT) || defined(TCXB8_PORT)
+    // NL80211_KEY_DEFAULT_BEACON enum is not defined in broadcom nl80211.h header
+    nla_put_flag(msg, wpa_alg_bip(params->alg) ? NL80211_ATTR_KEY_DEFAULT_MGMT : NL80211_ATTR_KEY_DEFAULT);
+#else
+    // NL80211_KEY_DEFAULT_BEACON enum is defined in wave-drv nl80211.h header
+    nla_put_flag(msg, wpa_alg_bip(params->alg) ?
+                 (params->key_idx == 6 || params->key_idx == 7 ?
+                  NL80211_KEY_DEFAULT_BEACON :
+                  NL80211_ATTR_KEY_DEFAULT_MGMT) :
+                 NL80211_ATTR_KEY_DEFAULT);
+#endif
 
     if (params->addr && is_broadcast_ether_addr(params->addr)) {
         struct nlattr *types;
