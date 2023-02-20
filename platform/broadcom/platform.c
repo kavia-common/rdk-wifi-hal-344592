@@ -13,6 +13,16 @@
 #define BUFLEN_128  128
 #define BUFLEN_256 256
 
+typedef struct wl_runtime_params {
+    char *param_name;
+    char *param_val;
+}wl_runtime_params_t;
+
+static wl_runtime_params_t g_wl_runtime_params[] = {
+    {"he color_collision", "0x7"}
+};
+
+static void set_wl_runtime_configs (const wifi_vap_info_map_t *vap_map);
 int sta_disassociated(int ap_index, char *mac, int reason);
 int sta_deauthenticated(int ap_index, char *mac, int reason);
 int sta_associated(int ap_index, wifi_associated_dev_t *associated_dev);
@@ -67,6 +77,42 @@ static int get_ccspwifiagent_interface_name_from_vap_index(unsigned int vap_inde
     }
     return RETURN_OK;
 }
+
+static void set_wl_runtime_configs (const wifi_vap_info_map_t *vap_map)
+{
+    if (NULL == vap_map) {
+        wifi_hal_error_print("%s:%d: Invalid parameter error!!\n",__func__, __LINE__);
+        return;
+    }
+
+    int wl_elems_index = 0;
+    int radio_index = 0;
+    int vap_index = 0;
+    char sys_cmd[128] = {0};
+    char interface_name[8] = {0};
+    wifi_vap_info_t *vap = NULL;
+    int no_of_elems = sizeof(g_wl_runtime_params) / sizeof(wl_runtime_params_t);
+
+    /* Traverse through each radios and its vaps, and set configurations for private interfaces. */
+    for(radio_index = 0; radio_index < g_wifi_hal.num_radios; radio_index++) {
+        if (vap_map != NULL) {
+            for(vap_index = 0; vap_index < vap_map->num_vaps; vap_index++) {
+                if (is_wifi_hal_vap_private(vap_index)) {
+                    memset (interface_name, 0 ,sizeof(interface_name));
+                    vap = &vap_map->vap_array[vap_index];
+                    get_interface_name_from_vap_index(vap->vap_index, interface_name);
+                    for (wl_elems_index = 0; wl_elems_index < no_of_elems; wl_elems_index++) {
+                        snprintf(sys_cmd, sizeof(sys_cmd), "wl -i %s %s %s", interface_name, g_wl_runtime_params[wl_elems_index].param_name, g_wl_runtime_params[wl_elems_index].param_val);
+                        wifi_hal_dbg_print("%s:%d: wl sys_cmd = %s \n", __func__, __LINE__,sys_cmd);
+                        system(sys_cmd);
+                    }
+                }
+            }
+            vap_map++;
+        }
+    }
+}
+
 
 int sta_disassociated(int ap_index, char *mac, int reason)
 {
@@ -268,6 +314,10 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     system("wl -i wl1.1 protection_control 0");
     system("wl -i wl0.1 gmode_protection_control 0");
     system("wl -i wl1.1 gmode_protection_control 0");
+
+    //set runtime configs using wl command.
+    set_wl_runtime_configs(vap_map);
+
     wifi_hal_dbg_print("%s:%d: wifi param set success\r\n", __func__, __LINE__);
 
     if (vap_map != NULL) {
