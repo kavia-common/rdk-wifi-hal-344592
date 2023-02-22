@@ -220,7 +220,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
 
 #ifdef TCXB7_PORT // for Broadcom based platforms
@@ -243,7 +244,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
 
 #ifdef TCXB8_PORT // for Broadcom based platforms
@@ -266,7 +268,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
 
 #ifdef CMXB7_PORT
@@ -289,7 +292,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
 
 #ifdef XLE_PORT // for Broadcom XLE
@@ -312,7 +316,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
 
 #ifdef SKYSR213_PORT // for Broadcom HUB6
@@ -335,7 +340,8 @@ const wifi_driver_info_t  driver_info = {
     platform_get_aid,
     platform_free_aid,
     platform_sync_done,
-    platform_update_radio_presence
+    platform_update_radio_presence,
+    platform_set_txpower,
 #endif
     
 };
@@ -2338,6 +2344,11 @@ platform_sync_done_t get_platform_sync_done_fn()
 platform_update_radio_presence_t get_platform_update_radio_presence_fn()
 {
     return driver_info.platform_update_radio_presence_fn;
+}
+
+platform_set_txpower_t get_platform_set_txpower_fn()
+{
+    return driver_info.platform_set_txpower_fn;
 }
 
 bool lsmod_by_name(const char *name)

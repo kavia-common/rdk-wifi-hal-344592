@@ -505,6 +505,7 @@ typedef int    (* platform_get_aid_t)(void* priv, u16* aid, const u8* addr);
 typedef int    (* platform_free_aid_t)(void* priv, u16* aid);
 typedef int    (* platform_sync_done_t)(void* priv);
 typedef int    (* platform_update_radio_presence_t)();
+typedef int    (* platform_set_txpower_t)(void* priv, uint txpower);
 
 struct ieee80211_he_cap_elem {
     u8 mac_cap_info[6];
@@ -560,6 +561,7 @@ typedef struct {
     platform_free_aid_t               platform_free_aid_fn;
     platform_sync_done_t              platform_sync_done_fn;
     platform_update_radio_presence_t  platform_update_radio_presence_fn;
+    platform_set_txpower_t            platform_set_txpower_fn;
 } wifi_driver_info_t;
 
 INT wifi_hal_init();
@@ -598,6 +600,7 @@ INT wifi_hal_BTMQueryRequest_callback_register( UINT apIndex,
                                                 wifi_BTMQueryRequest_callback btmQueryCallback,
                                                 wifi_BTMResponse_callback btmResponseCallback);
 INT wifi_hal_steering_eventRegister(wifi_steering_eventCB_t event_cb);
+INT wifi_hal_setRadioTransmitPower(wifi_radio_index_t radioIndex, uint txpower);
 wifi_radio_info_t *get_radio_by_index(wifi_radio_index_t index);
 wifi_interface_info_t *get_interface_by_vap_index(unsigned int vap_index);
 BOOL get_ie_by_eid(unsigned int eid, unsigned char *buff, unsigned int buff_len, unsigned char **ie_out, unsigned short *ie_out_len);
@@ -666,6 +669,8 @@ int wifi_drv_vendor_cmd(void *priv, unsigned int vendor_id,
                   unsigned int subcmd, const u8 *data,
                   size_t data_len, struct wpabuf *buf);
 #endif // HOSTAPD_VERSION >= 210
+
+int     wifi_drv_set_txpower(void* priv, uint txpower);
 
 int     wifi_set_privacy(void *priv, int enabled);
 int     wifi_set_ssid(void *priv, const u8 *buf, int len);
@@ -796,6 +801,7 @@ extern int platform_get_aid(void* priv, u16* aid, const u8* addr);
 extern int platform_free_aid(void* priv, u16* aid);
 extern int platform_sync_done(void* priv);
 extern int platform_update_radio_presence(void);
+extern int platform_set_txpower(void* priv, uint txpower);
 
 platform_pre_init_t     	get_platform_pre_init_fn();
 platform_post_init_t    	get_platform_post_init_fn();
@@ -814,6 +820,7 @@ platform_get_aid_t                  get_platform_get_aid_fn();
 platform_free_aid_t                 get_platform_free_aid_fn();
 platform_sync_done_t                get_platform_sync_done_fn();
 platform_update_radio_presence_t    get_platform_update_radio_presence_fn();
+platform_set_txpower_t              get_platform_set_txpower_fn();
 
 INT wifi_hal_wps_event(wifi_wps_event_t data);
 INT wifi_hal_get_default_wps_pin(char *pin);

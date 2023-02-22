@@ -881,6 +881,44 @@ int platform_sync_done(void* priv)
     return res;
 }
 
+int platform_set_txpower(void* priv, uint txpower)
+{
+    int res = -1;
+    int sPowerSelection = 0;
+
+    wifi_hal_dbg_print("%s:%d: send SET_TX_POWER_LIMIT_OFFSET request\n", __func__, __LINE__);
+
+    if (!priv){
+        return res;
+    }
+
+    switch (txpower) {
+        case 12: sPowerSelection=9; break;
+        case 25: sPowerSelection=6; break;
+        case 50: sPowerSelection=3; break;
+        case 75: sPowerSelection=1; break;
+        case 100: sPowerSelection=0; break;
+        default:
+            wifi_hal_error_print("%s:%d: unsupported transmit power (%u%%)\n", __func__, __LINE__, txpower);
+            return res;
+    }
+
+#if HOSTAPD_VERSION >= 210 //2.10
+    res = wifi_drv_vendor_cmd(priv, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_SET_TX_POWER_LIMIT_OFFSET,
+                                (u8*) &sPowerSelection, sizeof(sPowerSelection), NESTED_ATTR_NOT_USED, NULL);
+#else
+    res = wifi_drv_vendor_cmd(priv, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_SET_TX_POWER_LIMIT_OFFSET,
+                                (u8*) &sPowerSelection, sizeof(sPowerSelection), NULL);
+#endif
+
+    if (res) {
+        wifi_hal_dbg_print("%s:%d: nl80211: sending SET_TX_POWER_LIMIT_OFFSET failed: %i "
+            "(%s)\n",  __func__, __LINE__, res, strerror(res));
+    }
+
+    return res;
+}
+
 int platform_get_radius_key_default(char *radius_key)
 {
     return -1;

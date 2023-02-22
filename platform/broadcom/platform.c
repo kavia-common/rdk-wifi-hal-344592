@@ -1359,3 +1359,8 @@ int platform_set_ecomode_for_radio(const int wl_idx, const bool eco_pwr_down)
     return rc;
 }
 #endif // defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
+
+int platform_set_txpower(void* priv, uint txpower)
+{
+    return 0;
+}

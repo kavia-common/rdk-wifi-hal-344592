@@ -4690,6 +4690,9 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
         nl80211_enable_ap(interface, false);
         wifi_hal_dbg_print("%s:%d: Radio is not configured, set beacon to 0 for %s\n", __func__, __LINE__, interface->name);
     }
+    
+    wifi_hal_dbg_print("%s:%d: update transmitPower:%d\n", __func__, __LINE__, radio->oper_param.transmitPower);
+    wifi_drv_set_txpower(interface, radio->oper_param.transmitPower);
 
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_SET_WIPHY);
     nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index);
@@ -9338,6 +9341,22 @@ int wifi_drv_sync_done(void* priv)
     }
 }
 #endif
+
+int wifi_drv_set_txpower(void* priv, uint txpower)
+{
+#ifdef CONFIG_VENDOR_COMMANDS
+    wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
+
+    platform_set_txpower_t platform_set_txpower_fn = get_platform_set_txpower_fn();
+    if (platform_set_txpower_fn != NULL){
+        return platform_set_txpower_fn(priv, txpower);
+    } else {
+        return 0;
+    }
+#else
+    return 0;
+#endif
+}
 
 const struct wpa_driver_ops g_wpa_driver_nl80211_ops = {
     .name = "nl80211",

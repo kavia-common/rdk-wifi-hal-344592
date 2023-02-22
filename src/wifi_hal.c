@@ -1335,6 +1335,31 @@ INT wifi_hal_delApAclDevices(INT apIndex)
     return nl80211_set_acl(interface);
 }
 
+INT wifi_hal_setRadioTransmitPower(wifi_radio_index_t radioIndex, uint txpower)
+{
+    wifi_radio_info_t *radio;
+    wifi_interface_info_t *interface;
+
+    radio = get_radio_by_rdk_index(radioIndex);
+    if (radio == NULL) {
+        wifi_hal_error_print("%s:%d: radio for radio index:%d not found\n", __func__, __LINE__, radioIndex);
+        return RETURN_ERR;
+    }
+
+    if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_UPDATE_WIPHY_ON_PRIMARY) {
+        interface = get_primary_interface(radio);
+    }
+    else {
+        interface = get_private_vap_interface(radio);
+    }
+
+    if (!interface) {
+        wifi_hal_error_print("%s:%d: Error updating dev:%d no interfaces exist\n", __func__, __LINE__, radio->index);
+        return -1;
+    }
+
+    return wifi_drv_set_txpower(interface, txpower) ? RETURN_ERR : RETURN_OK;
+}
 
 INT wifi_hal_sendDataFrame( int vap_id, unsigned char *dmac, unsigned char *data_buff, int data_len, BOOL insert_llc, int protocol, int priority)
 {
