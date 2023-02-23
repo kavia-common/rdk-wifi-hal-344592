@@ -116,7 +116,22 @@ static int move_radio_capability(wifi_radio_capabilities_t *tmp_cap, wifi_radio_
     tmp_cap->numSupportedFreqBand = 1;
     tmp_cap->band[0] = cap->band[arr_loc];
     memcpy(&tmp_cap->channel_list[0], &cap->channel_list[arr_loc], sizeof(wifi_channels_list_t));
-    memcpy(&tmp_cap->channelWidth[0], &cap->channelWidth[arr_loc], sizeof(wifi_ieee80211Variant_t));
+    memcpy(&tmp_cap->channelWidth[0], &cap->channelWidth[arr_loc], sizeof(wifi_channelBandwidth_t));
+    if (tmp_cap->channelWidth[0] == 0) {
+        switch(tmp_cap->band[0]) {
+            case WIFI_FREQUENCY_2_4_BAND:
+                tmp_cap->channelWidth[0] = (WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ);
+            break;
+            case WIFI_FREQUENCY_5L_BAND:
+            case WIFI_FREQUENCY_5H_BAND:
+            case WIFI_FREQUENCY_5_BAND:
+            case WIFI_FREQUENCY_6_BAND:
+                tmp_cap->channelWidth[0] = (WIFI_CHANNELBANDWIDTH_20MHZ | WIFI_CHANNELBANDWIDTH_40MHZ | WIFI_CHANNELBANDWIDTH_80MHZ | WIFI_CHANNELBANDWIDTH_160MHZ);
+            break;
+            default:
+            break;
+        }
+    }
     memcpy(&tmp_cap->mode[0], &cap->mode[arr_loc], sizeof(wifi_ieee80211Variant_t));
     tmp_cap->maxBitRate[0] = cap->maxBitRate[arr_loc];
     tmp_cap->supportedBitRate[0] = cap->supportedBitRate[arr_loc];
