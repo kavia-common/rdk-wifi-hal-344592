@@ -397,16 +397,27 @@ int platform_wps_event(wifi_wps_event_t data)
 {
     switch(data.event) {
         case WPS_EV_PBC_ACTIVE:
+#if defined(_SR213_PRODUCT_REQ_) && defined(FEATURE_RDKB_LED_MANAGER)
+            // set led to blinking blue
+            system("sysevent set led_event rdkb_wps_start");
+            wifi_hal_dbg_print("%s:%d set wps led color to blinking blue \r\n", __func__, __LINE__);
+#else
             // set wps led color to blue
             system("led_wps_active 1");
             wifi_hal_dbg_print("%s:%d set wps led color to blue\r\n", __func__, __LINE__);
+#endif // defined(_SR213_PRODUCT_REQ_) && defined(FEATURE_RDKB_LED_MANAGER)
             break;
 
         case WPS_EV_SUCCESS:
         case WPS_EV_PBC_TIMEOUT:
+#if defined(_SR213_PRODUCT_REQ_) && defined(FEATURE_RDKB_LED_MANAGER)
+            system("sysevent set led_event rdkb_wps_stop");
+            wifi_hal_dbg_print("%s:%d set wps led color to solid white \r\n", __func__, __LINE__);
+#else
             // set wps led color to white
             system("led_wps_active 0");
             wifi_hal_dbg_print("%s:%d set wps led color to white\r\n", __func__, __LINE__);
+#endif //defined(_SR213_PRODUCT_REQ_) && defined(FEATURE_RDKB_LED_MANAGER)
             break;
 
         default:
