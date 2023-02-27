@@ -755,8 +755,6 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             interface->vap_initialized = true;
             if (radio->configured && radio->oper_param.enable) {
                 wifi_drv_set_operstate(interface, 1);
-            } else {
-                nl80211_interface_enable(interface->name, false);
             }
         }
         //Call vendor HAL
