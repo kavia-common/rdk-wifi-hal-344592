@@ -881,6 +881,9 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
 
             prepare_param_name(param_name, interface_name, "_venuetype");
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.interworking.interworking.venueType);
+    
+            prepare_param_name(param_name, interface_name, "_bcnprs_txpwr_offset");
+            set_decimal_nvram_param(param_name, abs(map->vap_array[index].u.bss_info.mgmtPowerControl));
 
         } else if (map->vap_array[index].vap_mode == wifi_vap_mode_sta) {
 
@@ -1030,6 +1033,31 @@ int platform_update_radio_presence(void)
        }
     }
     return 0;
+}
+
+int nvram_get_mgmt_frame_power_control(int vap_index, int* output_dbm)
+{
+    char nvram_name[NVRAM_NAME_SIZE];
+    char interface_name[8];
+    char *str_value;
+
+    if (output_dbm == NULL) {
+        wifi_hal_error_print("%s:%d - Null output buffer\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    memset(interface_name, 0, sizeof(interface_name));
+    get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
+    snprintf(nvram_name, sizeof(nvram_name), "%s_bcnprs_txpwr_offset", interface_name);
+    str_value = wlcsm_nvram_get(nvram_name);
+    if (str_value == NULL) {
+        wifi_hal_error_print("%s:%d nvram %s value is NULL\r\n", __func__, __LINE__, nvram_name);
+        return RETURN_ERR;
+    }
+
+    *output_dbm = 0 - atoi(str_value);
+    wifi_hal_dbg_print("%s:%d - MFPC for VAP %d is %d\n", __func__, __LINE__, vap_index, *output_dbm);
+    return RETURN_OK;
 }
 
 #if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)

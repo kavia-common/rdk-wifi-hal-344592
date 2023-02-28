@@ -843,8 +843,16 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 return RETURN_ERR;
             }
             wifi_hal_info_print("mac filter mode:%d apIndex:%d\n", filtermode, vap->vap_index);
+
         }
 #endif
+        if (vap->vap_mode == wifi_vap_mode_ap) {
+            if (wifi_setApManagementFramePowerControl(vap->vap_index, vap->u.bss_info.mgmtPowerControl) == RETURN_OK) {
+                wifi_hal_dbg_print("%s:%d:ManagementFrame Power control set for AP index %d successful \n", __func__, __LINE__, vap->vap_index);
+            } else {
+                wifi_hal_error_print("%s:%d:ManagementFrame Power control set failed for AP index %d\n", __func__, __LINE__, vap->vap_index);
+            }
+        }
     }
 
     if ((set_vap_params_fn = get_platform_create_vap_fn()) != NULL) {

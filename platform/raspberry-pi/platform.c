@@ -105,3 +105,8 @@ int platform_update_radio_presence(void)
 {
     return 0;
 }
+
+int nvram_get_mgmt_frame_power_control(int vap_index, int* output_dbm)
+{
+    return 0;
+}

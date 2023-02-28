@@ -604,6 +604,7 @@ BOOL is_wifi_hal_vap_hotspot_from_interfacename(char *interface_name);
 
 int nvram_get_current_password(char *l_password, int vap_index);
 int nvram_get_current_ssid(char *l_ssid, int vap_index);
+int nvram_get_mgmt_frame_power_control(int vap_index, int* output_dbm);
 int nl80211_set_regulatory_domain(wifi_countrycode_type_t country_code);
 int platform_get_channel_bandwidth(wifi_radio_index_t index, wifi_channelBandwidth_t *channelWidth);
 #ifdef __cplusplus
