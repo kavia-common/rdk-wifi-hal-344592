@@ -1074,6 +1074,38 @@ int get_security_mode_support_radius(int mode)
     return sec_mode;
 }
 
+int get_security_mode_int_from_str(char *security_mode_str,wifi_security_modes_t *security_mode)
+{
+
+    if(strcmp(security_mode_str, "None") == 0) {
+        *security_mode = wifi_security_mode_none;
+    } else if (strcmp(security_mode_str, "psk") == 0) {
+        *security_mode = wifi_security_mode_wpa_personal;
+    } else if (strcmp(security_mode_str, "psk2") == 0) {
+        *security_mode = wifi_security_mode_wpa2_personal;
+    } else if (strcmp(security_mode_str, "psk psk2") == 0) {
+        *security_mode = wifi_security_mode_wpa_wpa2_personal;
+    } else if (strcmp(security_mode_str, "sae") == 0) {
+        *security_mode = wifi_security_mode_wpa3_personal;
+    } else if (strcmp(security_mode_str, "psk2 sae") == 0) {
+        *security_mode = wifi_security_mode_wpa3_transition;
+    } else if (strcmp(security_mode_str, "wpa") == 0) {
+        *security_mode = wifi_security_mode_wpa_enterprise;
+    } else if (strcmp(security_mode_str, "wpa2") == 0) {
+        *security_mode = wifi_security_mode_wpa2_enterprise;
+    } else if (strcmp(security_mode_str, "wpa2") == 0) {
+        *security_mode = wifi_security_mode_wpa3_enterprise;
+    } else if (strcmp(security_mode_str, "wpa wpa2") == 0) {
+        *security_mode = wifi_security_mode_wpa_wpa2_enterprise;
+    } else {
+        wifi_hal_error_print("%s:%d: wifi security mode not found:[%s]\r\n",__func__, __LINE__, security_mode_str);
+        return RETURN_ERR;
+    }
+
+    wifi_hal_dbg_print("%s:%d: security mode %d string %s \r\n",__func__, __LINE__, *security_mode,security_mode_str);
+    return RETURN_OK;
+}
+
 int get_security_mode_str_from_int(wifi_security_modes_t security_mode, char *security_mode_str)
 {
     switch (security_mode) {

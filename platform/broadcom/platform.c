@@ -235,6 +235,30 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     return 0;
 }
 
+int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap_index)
+{
+    char nvram_name[NVRAM_NAME_SIZE];
+    char interface_name[8];
+    char *sec_mode_str;
+    wifi_security_modes_t current_security_mode;
+
+    memset(interface_name, 0, sizeof(interface_name));
+    get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
+    snprintf(nvram_name, sizeof(nvram_name), "%s_akm", interface_name);
+    sec_mode_str = wlcsm_nvram_get(nvram_name);
+    if (sec_mode_str == NULL) {
+        wifi_hal_error_print("%s:%d nvram sec_mode value is NULL\r\n", __func__, __LINE__);
+        return -1;
+    }
+
+    if (get_security_mode_int_from_str(sec_mode_str, &current_security_mode) == 0) {
+        *security_mode = current_security_mode;
+        return 0;
+    }
+
+    return -1;
+}
+
 int nvram_get_default_password(char *l_password, int vap_index)
 {
     char nvram_name[NVRAM_NAME_SIZE];
@@ -769,6 +793,58 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
         }
     }
 
+    return 0;
+}
+
+int platform_pre_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
+{
+#if defined(_SR213_PRODUCT_REQ_)
+    char interface_name[10];
+    char param[128];
+    wifi_vap_info_t *vap;
+    unsigned int vap_itr = 0;
+
+    for (vap_itr=0; vap_itr < map->num_vaps; vap_itr++) {
+        memset(interface_name, 0, sizeof(interface_name));
+        memset(param, 0, sizeof(param));
+        vap = &map->vap_array[vap_itr];
+        get_interface_name_from_vap_index(vap->vap_index, interface_name);
+        snprintf(param, sizeof(param), "%s_bss_enabled", interface_name);
+        if (vap->vap_mode == wifi_vap_mode_ap) {
+            if (vap->u.bss_info.enabled) {
+                wlcsm_nvram_set(param, "1");
+            }else {
+                wlcsm_nvram_set(param, "0");
+            }
+        }else if (vap->vap_mode == wifi_vap_mode_sta) {
+            if (vap->u.sta_info.enabled) {
+                wlcsm_nvram_set(param, "1");
+            } else {
+                wlcsm_nvram_set(param, "0");
+            }
+        }
+    }
+#endif //defined(_SR213_PRODUCT_REQ_)
+    return 0;
+}
+
+int platform_flags_init(int *flags)
+{
+    return 0;
+}
+
+int platform_get_aid(void* priv, u16* aid, const u8* addr)
+{
+    return 0;
+}
+
+int platform_free_aid(void* priv, u16* aid)
+{
+    return 0;
+}
+
+int platform_sync_done(void* priv)
+{
     return 0;
 }
 
