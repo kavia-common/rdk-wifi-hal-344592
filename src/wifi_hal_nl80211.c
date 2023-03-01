@@ -426,10 +426,6 @@ void recv_data_frame(wifi_interface_info_t *interface)
     mac_address_t sta;
     union wpa_event_data event;
     struct ieee802_1x_hdr *hdr;
-    mac_addr_str_t  frame_sa_str, frame_da_str, interface_mac_str;
-    wifi_device_callbacks_t *callbacks;
-
-    callbacks = get_hal_device_callbacks();
 
     vap = &interface->vap_info;
     saddr_len = sizeof(saddr);
@@ -458,14 +454,6 @@ void recv_data_frame(wifi_interface_info_t *interface)
         memcpy(sta, eth_hdr->dest, sizeof(mac_address_t));   
     } else {
         // drop
-        to_mac_str(interface->mac, interface_mac_str);
-        to_mac_str(eth_hdr->dest, frame_da_str);
-        to_mac_str(eth_hdr->src, frame_sa_str);
-        if ((callbacks != NULL) && (callbacks->analytics_callback != NULL)) {
-            callbacks->analytics_callback("Dropping eapol frame interface:%s frame sa:%s frame da:%s",
-                interface_mac_str, frame_sa_str, frame_da_str);
-        }
-        wifi_hal_info_print("%s:%d: dropping eapol frame\n", __func__, __LINE__);
         return;
     }
 
