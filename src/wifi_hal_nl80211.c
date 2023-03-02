@@ -553,6 +553,8 @@ void recv_link_status()
     iov.iov_base = buf;
     iov.iov_len = sizeof(buf);
     bool status;
+    int sock_fd;
+    struct sockaddr_ll sockaddr;
     char *ifName=NULL;
     wifi_interface_info_t *interface = NULL;
     wifi_radio_info_t *radio;
@@ -608,6 +610,45 @@ void recv_link_status()
                     if (radio->interface_map == NULL) continue;
                     interface = hash_map_get_first(radio->interface_map);
                     while (interface != NULL) {
+                        if(strncmp(interface->vap_info.bridge_name, ifName, strlen(interface->vap_info.bridge_name)+1) == 0) {
+                            if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+                                switch (nlmsgHdr->nlmsg_type)
+                                {
+                                case RTM_DELLINK:
+                                    if (interface->u.ap.br_sock_fd != 0) {
+                                        wifi_hal_info_print("%s:%d: %s BRIDGE IS DELETED\n", __func__, __LINE__, interface->vap_info.bridge_name);
+                                        close(interface->u.ap.br_sock_fd);
+                                        interface->u.ap.br_sock_fd = 0;
+                                    }
+                                    break;
+                                case RTM_NEWLINK:
+                                    if (interface->u.ap.br_sock_fd == 0) {
+                                        wifi_hal_info_print("%s:%d: %s BRIDGE IS CREATED\n", __func__, __LINE__, interface->vap_info.bridge_name);
+                                        sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+
+                                        if (sock_fd < 0) {
+                                            wifi_hal_error_print("%s:%d: Failed to open raw socket on bridge: %s\n", __func__, __LINE__, interface->vap_info.bridge_name);
+                                        } else {
+                                            memset(&sockaddr, 0, sizeof(struct sockaddr_ll));
+                                            sockaddr.sll_family   = AF_PACKET;
+                                            sockaddr.sll_protocol = htons(ETH_P_ALL);
+                                            sockaddr.sll_ifindex  = if_nametoindex(interface->vap_info.bridge_name);
+
+                                            if (bind(sock_fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
+                                                wifi_hal_error_print("%s:%d: Error binding to interface, err:%d\n", __func__, __LINE__, errno);
+                                                close(sock_fd);
+                                            } else {
+                                                interface->u.ap.br_sock_fd = sock_fd;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                default:
+                                    break;
+                                }
+                            }
+                        }
+
                         if(strncmp(interface->name, ifName, strlen(interface->name)+1) == 0) {
                             found = true;
                             break;
