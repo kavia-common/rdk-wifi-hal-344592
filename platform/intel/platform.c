@@ -324,6 +324,91 @@ int platform_get_ssid_default(char *ssid, int vap_index)
          wifi_hal_dbg_print("platform_get_ssid_default  vap: %d,succcess\n",vap_index);
          return nvram_get_current_ssid(ssid, vap_index); 
     }
+    else if (is_wifi_hal_vap_xhs(vap_index)){
+        /* Return default SSID of XHS vap */
+        ret = ARM_RPC(ssid,MAX_SSID_LEN,"default_xhs_ssid");
+        if(ret==0)
+        {
+            wifi_hal_dbg_print("platform_get_ssid_default xhs vap: %d, succcess\n",vap_index);
+          return 0;
+        }
+    }
+    else if(is_wifi_hal_vap_lnf_psk(vap_index)){
+        // Default SSID of PSK LnF vaps
+        wifi_hal_dbg_print("platform_get_ssid_default lnf psk vap : %d\n",vap_index);
+        fp = popen ("/lib/rdk/lnfScript.sh get_default_lnf_ssid", "r");
+        if(fp != NULL)
+        {
+            if (fgets (name, sizeof (name), fp) == NULL)
+            {
+                wifi_hal_dbg_print("platform_get_ssid_default: failed to get default LNF ssid\n");
+                pclose(fp);
+                return -1;
+            }
+            if(name[0] != '\0')
+            {
+                if( name[strlen(name) - 1] == '\n')
+                {
+                    name[strlen(name) - 1] = '\0';
+                }
+                strcpy(ssid,name);
+                wifi_hal_dbg_print("platform_get_ssid_default - LNF done.\n");
+                pclose(fp);
+                return 0;
+            }
+            else
+            {
+                wifi_hal_dbg_print("platform_get_ssid_default - ssid NULL\n");
+                pclose(fp);
+                return -1;
+            }
+        }
+        else
+        {
+            wifi_hal_dbg_print("platform_get_ssid_default - popen lnfScript.sh get_default_lnf_ssid failed \n");
+            return -1;
+        }
+    }
+    else if(is_wifi_hal_vap_lnf_radius(vap_index)){
+        // Default SSID of radius LnF vaps
+        wifi_hal_dbg_print("platform_get_ssid_default lnf radius vap : %d\n",vap_index);
+                fp = popen ("/lib/rdk/lnfScript.sh get_default_lnf_radius_ssid", "r");
+        if(fp != NULL)
+        {
+            if (fgets (name, sizeof (name), fp) == NULL)
+            {
+                wifi_hal_dbg_print("platform_get_ssid_default: failed to get default LNF ssid\n");
+                pclose(fp);
+                return -1;
+            }
+            if(name[0] != '\0')
+            {
+                if( name[strlen(name) - 1] == '\n')
+                {
+                    name[strlen(name) - 1] = '\0';
+                }
+                strcpy(ssid,name);
+                wifi_hal_dbg_print("platform_get_ssid_default - LNF done.\n");
+                pclose(fp);
+                return 0;
+            }
+            else
+            {
+                wifi_hal_dbg_print("platform_get_ssid_default - ssid NULL\n");
+                pclose(fp);
+                return -1;
+            }
+        }
+        else
+        {
+            wifi_hal_dbg_print("platform_get_ssid_default - popen lnfScript.sh get_default_lnf_radius_ssid failed \n");
+            return -1;
+        }
+    }
+    else{
+         wifi_hal_dbg_print("platform_get_ssid_default  vap: %d,succcess\n",vap_index);
+         return nvram_get_current_ssid(ssid, vap_index); 
+    }
     return -1;
 }
 
