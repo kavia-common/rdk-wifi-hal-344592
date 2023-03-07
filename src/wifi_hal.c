@@ -256,6 +256,18 @@ INT wifi_hal_pre_init()
     return RETURN_OK;
 }
 
+#if HAL_IPC
+INT wifi_hal_post_init(wifi_hal_post_init_t *post_init_struct)
+{
+    platform_post_init_t post_init_fn;
+    if ((post_init_fn = get_platform_post_init_fn()) != NULL) {
+        wifi_hal_info_print("%s:%d: platform post init\n", __func__, __LINE__);
+        post_init_fn(post_init_struct);
+    }
+
+    return RETURN_OK;
+}
+#else
 INT wifi_hal_post_init(wifi_vap_info_map_t *vap_map)
 {
     platform_post_init_t post_init_fn;
@@ -266,6 +278,7 @@ INT wifi_hal_post_init(wifi_vap_info_map_t *vap_map)
 
     return RETURN_OK;
 }
+#endif // HAL_IPC
 
 INT wifi_hal_get_default_ssid(char *ssid, int vap_index)
 {
@@ -359,8 +372,8 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
     }
 
     operationParam->op_class = op_class;
-        
-    wifi_hal_dbg_print("%s:%d:Index:%d Country: %d, Channel: %d, Op Class:%d\n", 
+
+    wifi_hal_dbg_print("%s:%d:Index:%d Country: %d, Channel: %d, Op Class:%d\n",
         __func__, __LINE__, index, operationParam->countryCode, operationParam->channel, operationParam->op_class);
 
     radio = get_radio_by_rdk_index(index);
@@ -815,6 +828,8 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             interface->vap_initialized = true;
             if (radio->configured && radio->oper_param.enable) {
                 wifi_drv_set_operstate(interface, 1);
+            } else {
+                nl80211_interface_enable(interface->name, false);
             }
         }
 #ifdef CMXB7_PORT
@@ -1538,6 +1553,54 @@ void wifi_csi_callback_register(wifi_csi_callback callback_proc)
     callbacks->csi_callback = callback_proc;
 }
 #endif
+
+INT wifi_hal_steering_eventRegister(wifi_steering_eventCB_t event_cb)
+{
+    wifi_device_callbacks_t *callbacks;
+    callbacks = get_hal_device_callbacks();
+    if (callbacks == NULL) {
+        return RETURN_ERR;
+    }
+    callbacks->steering_event_callback = event_cb;
+#ifndef HAL_IPC
+    wifi_steering_eventRegister(nl80211_steering_event);
+#endif
+    return 0;
+}
+
+INT wifi_hal_RMBeaconRequestCallbackRegister(unsigned int apIndex, wifi_RMBeaconReport_callback cb_fn)
+{
+    wifi_device_callbacks_t *callbacks;
+
+    if (apIndex >= MAX_AP_INDEX) {
+        wifi_hal_error_print("%s:%d: ERROR RM beacon request callback register failed. AP index %d out of range\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+    callbacks = get_hal_device_callbacks();
+    if (callbacks == NULL) {
+        return RETURN_ERR;
+    }
+    callbacks->bcnrpt_callback[apIndex] = cb_fn;
+    return 0;
+}
+INT wifi_hal_BTMQueryRequest_callback_register( UINT apIndex,
+                                                wifi_BTMQueryRequest_callback btmQueryCallback,
+                                                wifi_BTMResponse_callback btmResponseCallback)
+{
+     wifi_device_callbacks_t *callbacks;
+
+    if (apIndex >= MAX_AP_INDEX) {
+        wifi_hal_error_print("%s:%d: ERROR BTM Query/Request callback register failed. AP index %d out of range\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+    callbacks = get_hal_device_callbacks();
+    if (callbacks == NULL) {
+        return RETURN_ERR;
+    }
+    callbacks->btm_callback[apIndex].query_callback = btmQueryCallback;
+    callbacks->btm_callback[apIndex].response_callback = btmResponseCallback;
+    return 0;
+}
 
 wifi_device_callbacks_t *get_hal_device_callbacks()
 {

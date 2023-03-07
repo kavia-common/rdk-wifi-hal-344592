@@ -1,0 +1,534 @@
+#include "hal_ipc_wifi_wrappers.h"
+#include "wifi_hal_priv.h"
+#include "hal_ipc.h"
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_setRadioStatsEnable(   INT radioIndex,
+                                    BOOL enabled)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDNumberOfEntries(ULONG *numEntries)
+{
+    wifi_interface_info_t *interface;
+    wifi_radio_info_t *radio;
+    ULONG ssid_num = 0;
+
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    // iterate through num radios over all interfaces
+    for (int i = 0; i < g_wifi_hal.num_radios; i ++)
+    {
+        radio = get_radio_by_rdk_index(i);
+        interface = hash_map_get_first(radio->interface_map);
+
+        while (interface != NULL)
+        {
+            if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+                ssid_num++;
+            }
+            interface = hash_map_get_next(radio->interface_map, interface);
+        }
+    }
+    *numEntries = ssid_num;
+
+    wifi_hal_dbg_print("%s:%d: Num of SSIDs: %lu.\n", __func__, __LINE__, *numEntries);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApAssociatedDeviceStats(INT apIndex,
+                                        mac_address_t *clientMacAddress,
+                                        wifi_associated_dev_stats_t *associated_dev_stats,
+                                        ULLONG *handle)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_getApAssociatedDeviceStats(apIndex, clientMacAddress, associated_dev_stats, handle);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioChannelStats(INT radioIndex,
+                                  wifi_channelStats_t *input_output_channelStats_array,
+                                  INT array_size)
+{
+    wifi_hal_dbg_print("%s:%d: Enter. Array size %d\n", __func__, __LINE__, array_size);
+
+    if (array_size > HAL_IPC_RADIO_CHANNELS_MAX){
+        wifi_hal_dbg_print("%s:%d: array_size %d is too big. Truncate.\n", __func__, __LINE__, array_size);
+        array_size = HAL_IPC_RADIO_CHANNELS_MAX;
+    }
+
+    wifi_getRadioChannelStats(radioIndex, input_output_channelStats_array, array_size);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_startNeighborScan( INT apIndex,
+                                wifi_neighborScanMode_t scan_mode,
+                                INT dwell_time,
+                                UINT chan_num,
+                                UINT *chan_list)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getNeighboringWiFiStatus(  INT radioIndex,
+                                        wifi_neighbor_ap2_t **neighbor_ap_array,
+                                        UINT *output_array_size)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDTrafficStats2(  INT ssidIndex,
+                                    wifi_ssidTrafficStats2_t *output_struct)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_getSSIDTrafficStats2(ssidIndex, output_struct);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApAssociatedDeviceRxStatsResult(INT radioIndex,
+                                                mac_address_t *clientMacAddress,
+                                                wifi_associated_dev_rate_info_rx_stats_t **stats_array,
+                                                UINT *output_array_size,
+                                                ULLONG *handle)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_getApAssociatedDeviceRxStatsResult(radioIndex, clientMacAddress, stats_array, output_array_size, handle);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDEnable( INT ssidIndex,
+                            BOOL *output_bool)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(ssidIndex);
+
+    *output_bool = interface->vap_info.u.bss_info.enabled;
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDRadioIndex( INT ssidIndex,
+                                INT *radioIndex)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(ssidIndex);
+
+    *radioIndex = interface->vap_info.radio_index;
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDNameStatus( INT apIndex,
+                                CHAR *output_string)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    strcpy(output_string, interface->vap_info.u.bss_info.ssid);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApName( INT apIndex,
+                        CHAR *output_string)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    get_interface_name_from_vap_index(apIndex, output_string);
+
+    wifi_hal_dbg_print("%s:%d: Requested index %d cloud name is %s.\n", __func__, __LINE__, apIndex, output_string);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getNeighborReportActivation(   UINT apIndex,
+                                            BOOL *activate)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    *activate = interface->vap_info.u.bss_info.nbrReportActivated;
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getBSSTransitionActivation(UINT apIndex,
+                                        BOOL *activate)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    *activate = interface->vap_info.u.bss_info.bssTransitionActivated;
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApAssociatedClientDiagnosticResult( INT apIndex,
+                                                    char *mac_addr,
+                                                    wifi_associated_dev3_t *dev_conn)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_getApAssociatedClientDiagnosticResult(apIndex, mac_addr, dev_conn);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioOperatingFrequencyBand(INT radioIndex,
+                                            CHAR *output_string)
+{
+    wifi_radio_info_t *radio;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    radio = get_radio_by_rdk_index(radioIndex);
+
+    if (radio->oper_param.band == WIFI_FREQUENCY_5_BAND) {
+        snprintf(output_string, 64, "5GHz");
+    } else if (radio->oper_param.band == WIFI_FREQUENCY_6_BAND) {
+        snprintf(output_string, 64, "6GHz");
+    } else {
+        snprintf(output_string, 64, "2.4GHz");
+    }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioNumberOfEntries(ULONG *output)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    *output = g_wifi_hal.num_radios;
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApAssociatedDeviceTxStatsResult(INT radioIndex,
+                                                mac_address_t *clientMacAddress,
+                                                wifi_associated_dev_rate_info_tx_stats_t **stats_array,
+                                                UINT *output_array_size,
+                                                ULLONG *handle)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getMultiPskClientKey(  INT apIndex,
+                                    mac_address_t mac,
+                                    wifi_key_multi_psk_t *key)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_steering_setGroup( UINT steeringgroupIndex,
+                                wifi_steering_apConfig_t *cfg_2,
+                                wifi_steering_apConfig_t *cfg_5)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_steering_clientSet(UINT steeringgroupIndex,
+                                INT apIndex, mac_address_t client_mac,
+                                wifi_steering_clientConfig_t *config)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_steering_clientRemove( UINT steeringgroupIndex,
+                                    INT apIndex,
+                                    mac_address_t client_mac)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    return nl80211_kick_device(interface, client_mac);
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_steering_clientDisconnect( UINT steeringgroupIndex,
+                                        INT apIndex,
+                                        mac_address_t client_mac,
+                                        wifi_disconnectType_t type,
+                                        UINT reason)
+{
+    //wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+
+    //interface = get_interface_by_vap_index(apIndex);
+
+    // wifi_sta_remove is statically defined in wifi_hal_nl80211.c
+    //wifi_sta_remove(interface, client_mac, type == DISCONNECT_TYPE_DEAUTH, reason);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_setBTMRequest( UINT apIndex,
+                            CHAR *peerMac,
+                            wifi_BTMRequest_t *request)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getSSIDName(   INT apIndex,
+                            CHAR *output_string)
+{
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    strcpy(output_string, interface->vap_info.u.bss_info.ssid);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_setRMBeaconRequest(UINT apIndex,
+                                CHAR *peer,
+                                wifi_BeaconRequest_t *in_request,
+                                UCHAR *out_DialogToken)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getAssociationReqIEs(  UINT apIndex,
+                                    const mac_address_t *clientMacAddress,
+                                    CHAR *req_ies,
+                                    UINT req_ies_size,
+                                    UINT *req_ies_len)
+{
+
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_interface_info_t *interface;
+    struct sta_info *station = NULL;
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    char* mac = (char*) &clientMacAddress[0];
+
+    station = ap_get_sta(&interface->u.ap.hapd, mac);
+
+    strcpy(req_ies, station->assoc_req);
+    *req_ies_len = station->assoc_req_len;
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_setNeighborReports(UINT apIndex,
+                                UINT numNeighborReports,
+                                wifi_NeighborReport_t *neighborReports)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: \tNOTICE: EMTPY FUNCTION.\n", __func__, __LINE__);
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioCountryCode(   INT radioIndex,
+                                    CHAR *output_string)
+{
+    wifi_radio_info_t *radio;
+
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    radio = get_radio_by_rdk_index(radioIndex);
+
+    if(!radio){
+        wifi_hal_error_print("%s:%d: radio pointer is NULL!.\n", __func__, __LINE__);
+        return -1;
+    }
+
+    get_coutry_str_from_code(radio->oper_param.countryCode, output_string);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioOperatingChannelBandwidth( INT radioIndex,
+                                                CHAR *output_string)
+{
+    wifi_radio_info_t *radio;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    radio = get_radio_by_rdk_index(radioIndex);
+
+    switch (radio->oper_param.channelWidth) {
+        case WIFI_CHANNELBANDWIDTH_20MHZ:
+            snprintf(output_string, 6, "20MHz");
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_40MHZ:
+            snprintf(output_string, 6, "40MHz");
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_80MHZ:
+            snprintf(output_string, 6, "80MHz");
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_160MHZ:
+            snprintf(output_string, 7, "160MHz");
+            break;
+
+        default:
+            snprintf(output_string, 6, "20MHz");
+            break;
+    }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioTransmitPower( INT radioIndex,
+                                    ULONG *output_ulong)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+    /*
+    wifi_radio_info_t *radio;
+
+    radio = get_radio_by_rdk_index(radioIndex);
+
+    if (!radio){
+        wifi_hal_dbg_print("%s:%d: radio info for index %d is NULL.\n", __func__, __LINE__, radioIndex);
+        return -1;
+    }
+
+    *output_ulong = radio->oper_param.transmitPower;
+    */
+
+    wifi_getRadioTransmitPower(radioIndex, output_ulong);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_setNeighborReportActivation(UINT apIndex, BOOL activate)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    wifi_interface_info_t *interface;
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    interface->vap_info.u.bss_info.nbrReportActivated = activate;
+
+    return 0;
+}
+
+struct ovs_radioname_cloudradioname_map {
+    unsigned int radio_index;
+    char cloudradioname[64];
+    char gw_radio_name[64];
+};
+
+struct ovs_radioname_cloudradioname_map cloud_radio_map[] = {
+    {0, "wl0", "wlan0"},
+    {1, "wl1", "wlan2"}
+};
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getRadioIfName(INT radioIndex, CHAR *output_string)
+{
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    if (radioIndex > g_wifi_hal.num_radios){
+        wifi_hal_dbg_print("%s:%d: radio index %d out of range.\n", __func__, __LINE__, radioIndex);
+        return -1;
+    }
+
+    if (!output_string){
+        wifi_hal_error_print("%s:%d: NULL pointer string passed.\n", __func__, __LINE__);
+        return -1;
+    }
+
+    wifi_hal_dbg_print("%s:%d: Requested radio index %d GW name %s translated to cloud name %s .\n", __func__, __LINE__,
+                                radioIndex, cloud_radio_map[radioIndex].gw_radio_name, cloud_radio_map[radioIndex].cloudradioname);
+
+    strcpy(output_string, cloud_radio_map[radioIndex].cloudradioname);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_hal_getApNumDevicesAssociated(INT apIndex, ULONG *output_ulong)
+{
+    wifi_interface_info_t *interface;
+
+    wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
+
+    interface = get_interface_by_vap_index(apIndex);
+
+    if (!interface)
+    {
+        wifi_hal_error_print("%s:%d: ERROR Interface for vap index %d doesn't exist.\n", __func__, __LINE__, apIndex);
+        return -1;
+    }
+
+    *output_ulong = interface->u.ap.hapd.num_sta;
+
+    wifi_hal_dbg_print("%s:%d: AP index %d, num assoc devs: %lu.\n", __func__, __LINE__, apIndex, *output_ulong);
+
+    return 0;
+}
+

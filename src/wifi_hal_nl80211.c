@@ -218,6 +218,325 @@ bool bridge_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
     return found;
 }
 
+static u8 he_mcs_nss_size(const struct ieee80211_he_cap_elem *he_cap)
+{
+    u8 count = 4;
+
+    if (he_cap->phy_cap_info[0] & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_160MHZ_IN_5G) {
+        count += 4;
+    }
+
+    if (he_cap->phy_cap_info[0] & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_80PLUS80_MHZ_IN_5G) {
+        count += 4;
+    }
+
+    return count;
+}
+
+static int get_ht_mcs_max(uint32_t mcs_set)
+{
+    int i;
+
+    // We don't handle mcs_set == 0. Just return 0 in that case.
+    for (i = 0; i < 32; i++) {
+        // Shift right the mcs_set until no more bits
+        // are set. Amount of the shifts equals to
+        // the position of highest bit set to '1'. Position
+        // of highest '1' determines the max supported
+        // MCS. We check here only for 0-31 MCS set.
+        mcs_set = mcs_set >> 1;
+        if (mcs_set == 0) {
+            break;
+        }
+    }
+
+    return i;
+}
+
+static int get_vht_mcs_max(uint16_t rx_mcs_map)
+{
+    int i;
+    int max_mcs = 0;
+
+    for (i = 0; i < 8; i++) {
+        switch (rx_mcs_map & 0x03)
+        {
+            case 0x00:
+                max_mcs = max_mcs < 7 ? 7 : max_mcs;
+                break;
+            case 0x01:
+                max_mcs = max_mcs < 8 ? 8 : max_mcs;
+                break;
+            case 0x02:
+                max_mcs = max_mcs < 9 ? 9 : max_mcs;
+                break;
+            default:
+                // Not supported or invalid
+                break;
+        }
+
+        rx_mcs_map = rx_mcs_map >> 2;
+    }
+
+    return max_mcs;
+}
+
+static int get_vht_nss_max(uint16_t rx_mcs_map)
+{
+    int i;
+    int number_of_spatial_streams = 0;
+
+    for (i = 0; i < 8; i++) {
+        // Set number of spatial streams for highest found valid bit pair.
+        if ((rx_mcs_map & 0x03) != 0x03) {
+            number_of_spatial_streams = i + 1;
+        }
+        rx_mcs_map = rx_mcs_map >> 2;
+    }
+
+    return number_of_spatial_streams;
+}
+
+static int get_he_mcs_max(uint16_t rx_mcs_map)
+{
+    int i;
+    int max_mcs = 0;
+
+    for (i = 0; i < 8; i++) {
+        switch (rx_mcs_map & 0x03)
+        {
+            case 0x00:
+                max_mcs = max_mcs < 7 ? 7 : max_mcs;
+                break;
+            case 0x01:
+                max_mcs = max_mcs < 9 ? 9 : max_mcs;
+                break;
+            case 0x02:
+                max_mcs = max_mcs < 11 ? 11 : max_mcs;
+                break;
+            default:
+                // Not supported or invalid
+                break;
+        }
+
+        rx_mcs_map = rx_mcs_map >> 2;
+    }
+
+    return max_mcs;
+}
+
+static int get_he_nss_max(uint16_t rx_mcs_map)
+{
+    int i;
+    int number_of_spatial_streams = 0;
+
+    for (i = 0; i < 8; i++) {
+        // Set number of spatial streams for highest found valid bit pair.
+        if ((rx_mcs_map & 0x03) != 0x03) {
+            number_of_spatial_streams = i + 1;
+        }
+        rx_mcs_map = rx_mcs_map >> 2;
+    }
+
+    return number_of_spatial_streams;
+}
+
+static void parse_btm_supported(wifi_steering_evConnect_t *steering_event, uint32_t ext_caps)
+{
+    // We only check the first 4 bytes from extended capabilities
+    steering_event->isBTMSupported = !!(ext_caps & IEEE80211_EXTCAPIE_BSSTRANSITION);
+}
+
+static void parse_rrm_supported(wifi_steering_evConnect_t *steering_event, uint8_t rm_cap_oct1,
+    uint8_t rm_cap_oct2, uint8_t rm_cap_oct5)
+{
+    steering_event->rrmCaps.linkMeas = !!(rm_cap_oct1 & IEEE80211_RRM_CAPS_LINK_MEASUREMENT);
+    steering_event->rrmCaps.neighRpt = !!(rm_cap_oct1 & IEEE80211_RRM_CAPS_NEIGHBOR_REPORT);
+    steering_event->rrmCaps.bcnRptPassive = !!(rm_cap_oct1 & IEEE80211_RRM_CAPS_BEACON_REPORT_PASSIVE);
+    steering_event->rrmCaps.bcnRptActive = !!(rm_cap_oct1 & IEEE80211_RRM_CAPS_BEACON_REPORT_ACTIVE);
+    steering_event->rrmCaps.bcnRptTable = !!(rm_cap_oct1 & IEEE80211_RRM_CAPS_BEACON_REPORT_TABLE);
+    steering_event->rrmCaps.lciMeas = !!(rm_cap_oct2 & IEEE80211_RRM_CAPS_LCI_MEASUREMENT);
+    steering_event->rrmCaps.ftmRangeRpt = !!(rm_cap_oct5 & IEEE80211_RRM_CAPS_FTM_RANGE_REPORT);
+}
+
+static void parse_ht_cap(wifi_steering_evConnect_t *steering_event, uint16_t ht_cap_info, uint32_t mcs_set)
+{
+    int ht_mcs_max;
+    int ht_nss_max;
+
+    if ((ht_cap_info & IEEE80211_HTCAP_C_CHWIDTH40) && (steering_event->datarateInfo.maxChwidth < 40)) {
+        steering_event->datarateInfo.maxChwidth = 40;
+    }
+
+    ht_mcs_max = get_ht_mcs_max(mcs_set);
+    ht_nss_max = ht_mcs_max / 8 + 1;
+
+    if (steering_event->datarateInfo.maxMCS < ht_mcs_max) {
+        steering_event->datarateInfo.maxMCS = ht_mcs_max % 8;  // we always normalize to VHT
+    }
+
+    if (steering_event->datarateInfo.maxStreams < ht_nss_max) {
+        steering_event->datarateInfo.maxStreams = ht_nss_max;
+    }
+
+    steering_event->datarateInfo.isStaticSmps = (ht_cap_info & IEEE80211_HTCAP_C_SM_MASK) == 0x00 ? 1 : 0;
+}
+
+static void parse_pwr_cap(wifi_steering_evConnect_t *steering_event, uint8_t max_tx_power)
+{
+    steering_event->datarateInfo.maxTxpower = max_tx_power;
+}
+
+static void parse_vht_cap(wifi_steering_evConnect_t *steering_event, uint32_t vht_info, uint16_t rx_mcs_map)
+{
+    int vht_max;
+    int nss_max;
+
+    steering_event->datarateInfo.maxChwidth = 80;
+    if (vht_info & IEEE80211_VHTCAP_SHORTGI_160) {
+        steering_event->datarateInfo.maxChwidth = 160;
+    }
+
+    vht_max = get_vht_mcs_max(rx_mcs_map);
+    nss_max = get_vht_nss_max(rx_mcs_map);
+
+
+    if (steering_event->datarateInfo.maxMCS < vht_max) {
+        steering_event->datarateInfo.maxMCS = vht_max;
+    }
+
+    if (steering_event->datarateInfo.maxStreams < nss_max) {
+        steering_event->datarateInfo.maxStreams = nss_max;
+    }
+
+    steering_event->datarateInfo.isMUMimoSupported = !!(vht_info & IEEE80211_VHTCAP_MU_BFORMEE) ||
+        !!(vht_info & IEEE80211_VHTCAP_MU_BFORMER);
+}
+
+void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steering_evConnect_t *steering_event,
+    struct ieee80211_mgmt *mgmt, unsigned int len)
+{
+    wifi_radio_info_t *radio;
+    ieee80211_tlv_t *he_cap_tlv = NULL;
+    unsigned short he_cap_len;
+    struct ieee80211_sta_he_cap sta_he_cap = {0};
+    int has_vht = 0, has_ht = 0, has_he = 0;
+
+    const struct element *elem;
+
+    radio = get_radio_by_rdk_index(interface->vap_info.radio_index);
+
+    if (radio->oper_param.band == WIFI_FREQUENCY_5_BAND) {
+        steering_event->bandCap5G = 1;
+    } else if (radio->oper_param.band == WIFI_FREQUENCY_2_4_BAND) {
+        steering_event->bandCap2G = 1;
+    }
+
+    steering_event->datarateInfo.maxChwidth = 20;
+
+    for_each_element(elem, (unsigned char *)(mgmt->u.assoc_req.variable), len - 4) {
+        switch (elem->id) {
+        case WLAN_EID_EXT_CAPAB:
+            parse_btm_supported(steering_event, le32toh(*(uint32_t *)elem->data));
+            break;
+        case WLAN_EID_RRM_ENABLED_CAPABILITIES:
+            parse_rrm_supported(steering_event, elem->data[0], elem->data[1], elem->data[4]);
+            break;
+        case WLAN_EID_HT_CAP:
+            parse_ht_cap(steering_event, le16toh(*(uint16_t *)elem->data), le32toh(*(uint32_t *)&elem->data[3]));
+            has_ht = 1;
+            break;
+        case WLAN_EID_VHT_CAP:
+            parse_vht_cap(steering_event, le32toh(*(uint32_t *)elem->data), le16toh(*(uint16_t*)&elem->data[4]));
+            has_vht = 1;
+            break;
+        case WLAN_EID_PWR_CAPABILITY:
+            parse_pwr_cap(steering_event, elem->data[1]);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* HE */
+    if (get_ie_ext_by_eid(WLAN_EID_EXT_HE_CAPABILITIES, (unsigned char *)(mgmt->u.assoc_req.variable), len - 4,
+        (unsigned char **)&he_cap_tlv, &he_cap_len) == true) {
+        u8 mcs_nss_size;
+
+        // value[0] is eid
+        memcpy(&sta_he_cap.he_cap_elem, he_cap_tlv->value + 1, sizeof(sta_he_cap.he_cap_elem));
+        mcs_nss_size = he_mcs_nss_size(&sta_he_cap.he_cap_elem);
+        memcpy(&sta_he_cap.he_mcs_nss_supp, &he_cap_tlv->value[sizeof(sta_he_cap.he_cap_elem) + 1], mcs_nss_size);
+
+        has_he = 1;
+
+        if (sta_he_cap.he_cap_elem.phy_cap_info[3] & IEEE80211_HE_PHY_CAP3_SU_BEAMFORMER ||
+            sta_he_cap.he_cap_elem.phy_cap_info[4] & IEEE80211_HE_PHY_CAP4_SU_BEAMFORMEE ||
+            sta_he_cap.he_cap_elem.phy_cap_info[4] & IEEE80211_HE_PHY_CAP4_MU_BEAMFORMER) {
+            steering_event->datarateInfo.isMUMimoSupported = 1;
+        }
+    }
+
+    if (has_he) {
+        steering_event->datarateInfo.phyMode = 13; /* AX */
+    } else if (has_vht) {
+        steering_event->datarateInfo.phyMode = 11; /* AC */
+    } else if (has_ht) {
+        steering_event->datarateInfo.phyMode = 4; /* N */
+    } else {
+        steering_event->datarateInfo.phyMode = 2; /* G */
+    }
+
+    if (he_cap_tlv != NULL) {
+        u8 info = sta_he_cap.he_cap_elem.phy_cap_info[0];
+
+        int he_max, nss_max;
+
+        he_max = get_he_mcs_max(sta_he_cap.he_mcs_nss_supp.rx_mcs_80);
+        nss_max = get_he_nss_max(sta_he_cap.he_mcs_nss_supp.rx_mcs_80);
+
+        if (steering_event->datarateInfo.maxMCS < he_max) {
+            steering_event->datarateInfo.maxMCS = he_max;
+        }
+
+        if (steering_event->datarateInfo.maxStreams < nss_max) {
+            steering_event->datarateInfo.maxStreams = nss_max;
+        }
+
+        if (steering_event->bandCap2G) {
+            if (info & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_IN_2G && steering_event->datarateInfo.maxChwidth < 40) {
+                steering_event->datarateInfo.maxChwidth = 40;
+            }
+        } else if (steering_event->bandCap5G) {
+            if (info & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_160MHZ_IN_5G ||
+                info & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_80PLUS80_MHZ_IN_5G) {
+                steering_event->datarateInfo.maxChwidth = 160;
+
+                he_max = get_he_mcs_max(sta_he_cap.he_mcs_nss_supp.rx_mcs_160);
+                nss_max = get_he_nss_max(sta_he_cap.he_mcs_nss_supp.rx_mcs_160);
+
+                if (steering_event->datarateInfo.maxMCS < he_max) {
+                    steering_event->datarateInfo.maxMCS = he_max;
+                }
+
+                if (steering_event->datarateInfo.maxStreams < nss_max) {
+                    steering_event->datarateInfo.maxStreams = nss_max;
+                }
+            } else if (info & IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G &&
+                steering_event->datarateInfo.maxChwidth < 80) {
+                steering_event->datarateInfo.maxChwidth = 80;
+            }
+        }
+    }
+}
+
+static void fill_steering_event_general(wifi_steering_event_t *event, wifi_steering_eventType_t type, wifi_vap_info_t *vap)
+{
+    event->type = type;
+    event->apIndex = vap->vap_index;
+    event->timestamp_ms = time(NULL);
+}
+
 int process_mgmt_frame(struct nl_msg *msg, void *arg)
 {
     wifi_interface_info_t *interface;
@@ -235,6 +554,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     bool drop = false;
     u16 reason = 0;
     wifi_device_callbacks_t *callbacks;
+    wifi_steering_event_t steering_evt;
     struct sta_info *station = NULL;
     wifi_frame_t mgmt_frame;
     int sig_dbm = -100;
@@ -328,6 +648,21 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         mgmt_type = WIFI_MGMT_FRAME_TYPE_ASSOC_REQ;
         wifi_hal_dbg_print("%s:%d: Received assoc frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
+
+        if (callbacks->steering_event_callback != 0 && vap->u.bss_info.security.mode == wifi_security_mode_none) {
+            wifi_steering_evConnect_t connect_steering_event = {0};
+
+            create_connect_steering_event(interface, &connect_steering_event, mgmt, len);
+
+            fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_CLIENT_CONNECT, vap);
+            memcpy(steering_evt.data.connect.client_mac, sta, sizeof(mac_address_t));
+            steering_evt.data.connect = connect_steering_event;
+
+
+            wifi_hal_dbg_print("%s:%d: Send Client Connect steering event\n", __func__, __LINE__);
+            callbacks->steering_event_callback(0, &steering_evt);
+        }
+
         break;
 
     case WLAN_FC_STYPE_REASSOC_REQ:
@@ -344,6 +679,20 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         mgmt_type = WIFI_MGMT_FRAME_TYPE_PROBE_REQ;
         //wifi_hal_dbg_print("%s:%d: Received probe req frame from: %s\n", __func__, __LINE__,
         //to_mac_str(sta, sta_mac_str));
+
+        if (callbacks->steering_event_callback != 0) {
+            fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_PROBE_REQ, vap);
+            memcpy(steering_evt.data.probeReq.client_mac, sta, sizeof(mac_address_t));
+            steering_evt.data.probeReq.rssi = sig_dbm;
+            steering_evt.data.probeReq.broadcast = !!memcmp(mgmt->da, bmac, sizeof(mac_address_t));
+            //XXX get from ACL?
+            steering_evt.data.probeReq.blocked = 0;
+
+            wifi_hal_dbg_print("%s:%d: Send Probe Req steering event\n", __func__, __LINE__);
+
+            callbacks->steering_event_callback(0, &steering_evt);
+        }
+
         break;
 
     case WLAN_FC_STYPE_ACTION:
@@ -420,6 +769,17 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
                     callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
                 }
             }
+        }
+        if (callbacks->steering_event_callback != 0) {
+            fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_CLIENT_DISCONNECT, vap);
+            memcpy(steering_evt.data.disconnect.client_mac, sta, sizeof(mac_address_t));
+            steering_evt.data.disconnect.reason = reason;
+            steering_evt.data.disconnect.source = DISCONNECT_SOURCE_REMOTE;
+            steering_evt.data.disconnect.type = DISCONNECT_TYPE_DEAUTH;
+
+            wifi_hal_dbg_print("%s:%d: Send Client Deauth steering event\n", __func__, __LINE__);
+
+            callbacks->steering_event_callback(0, &steering_evt);
         }
 
         break;    
@@ -1409,6 +1769,23 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
     nl_socket_free(sk);
 
     return 0;
+}
+
+void nl80211_steering_event(UINT steeringgroupIndex, wifi_steering_event_t *event)
+{
+    wifi_device_callbacks_t *callbacks;
+
+    if (event->type == WIFI_STEERING_EVENT_CLIENT_CONNECT ||
+        event->type == WIFI_STEERING_EVENT_PROBE_REQ ||
+        event->type == WIFI_STEERING_EVENT_CLIENT_DISCONNECT ||
+        event->type == WIFI_STEERING_EVENT_AUTH_FAIL) {
+        return;
+    }
+
+    callbacks = get_hal_device_callbacks();
+    if (callbacks->steering_event_callback != 0) {
+        callbacks->steering_event_callback(steeringgroupIndex, event);
+    }
 }
 
 int nl80211_interface_enable(const char *ifname, bool enable)
@@ -3354,6 +3731,31 @@ static int get_sta_handler(struct nl_msg *msg, void *arg)
         if (callbacks->assoc_cb[i] != NULL) {
             callbacks->assoc_cb[i](vap->vap_index, &associated_dev);
         }
+    }
+
+    if (callbacks->steering_event_callback != 0 &&
+        vap->u.bss_info.security.mode != wifi_security_mode_none) {
+        wifi_steering_event_t steering_evt;
+        struct sta_info *station = NULL;
+
+        wifi_steering_evConnect_t connect_steering_event = {0};
+        station = ap_get_sta(&interface->u.ap.hapd, sta_mac);
+
+        if (station == NULL) {
+            wifi_hal_error_print("%s:%d: No station for Client Connect steering event", __func__, __LINE__);
+            return NL_SKIP;
+        }
+
+        create_connect_steering_event(interface, &connect_steering_event,
+            (struct ieee80211_mgmt *)station->assoc_req, station->assoc_req_len);
+
+        fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_CLIENT_CONNECT, vap);
+        memcpy(steering_evt.data.connect.client_mac, sta_mac, sizeof(mac_address_t));
+        steering_evt.data.connect = connect_steering_event;
+
+        wifi_hal_dbg_print("%s:%d: Send Client Connect steering event\n", __func__, __LINE__);
+
+        callbacks->steering_event_callback(0, &steering_evt);
     }
 
     return NL_SKIP;
@@ -5755,6 +6157,20 @@ int wifi_drv_sta_notify_deauth(void *priv, const u8 *own_addr, const u8 *addr, u
         if (callbacks->apDeAuthEvent_cb[i] != NULL) {
             callbacks->apDeAuthEvent_cb[i](vap->vap_index, to_mac_str(addr, mac_str), reason);
         }
+    }
+
+    if (callbacks->steering_event_callback != 0) {
+        wifi_steering_event_t steering_evt;
+
+        fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_AUTH_FAIL, vap);
+        memcpy(steering_evt.data.authFail.client_mac, addr, sizeof(mac_address_t));
+        steering_evt.data.authFail.reason = reason;
+        steering_evt.data.authFail.bsBlocked = 0;
+        steering_evt.data.authFail.bsBlocked = 0;
+
+        wifi_hal_dbg_print("%s:%d: Send Auth Fail steering event\n", __func__, __LINE__);
+
+        callbacks->steering_event_callback(0, &steering_evt);
     }
 
     return 0;

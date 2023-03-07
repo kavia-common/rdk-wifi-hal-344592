@@ -1069,6 +1069,30 @@ wifi_interface_info_t *get_interface_by_vap_index(unsigned int vap_index)
     return NULL;
 }
 
+BOOL get_ie_ext_by_eid(unsigned int eid, unsigned char *buff, unsigned int buff_len, unsigned char **ie_out, unsigned short *ie_out_len)
+{
+    ieee80211_tlv_t *ie = NULL;
+    signed int len;
+
+    ie = (ieee80211_tlv_t *)buff;
+    len = buff_len;
+
+    while ((ie != NULL) && (len > 0)) {
+        if ((ie->type == WLAN_EID_EXTENSION) && (ie->length != 0) && ie->value[0] == eid) {
+            //wifi_hal_dbg_print("%s:%d: Found ssid ie, ie length:%d\n", __func__, __LINE__,
+            //    ie->length);
+            *ie_out = (unsigned char *)ie;
+            *ie_out_len = ie->length + sizeof(ieee80211_tlv_t);
+            return true;
+        }
+
+        len = len - (ie->length + sizeof(ieee80211_tlv_t));
+        ie = (ieee80211_tlv_t *)((unsigned char *)ie + (ie->length + sizeof(ieee80211_tlv_t)));
+    }
+
+    return false;
+}
+
 BOOL get_ie_by_eid(unsigned int eid, unsigned char *buff, unsigned int buff_len, unsigned char **ie_out, unsigned short *ie_out_len)
 {
     ieee80211_tlv_t *ie = NULL;

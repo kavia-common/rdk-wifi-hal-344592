@@ -10,6 +10,11 @@
 #include "wifi_hal_priv.h"
 #include "arris_rpc.h"
 
+#if HAL_IPC
+#include "hal_ipc.h"
+#include "server_hal_ipc.h"
+#endif
+
 #define COUNTRY_LENGTH 10
 #define MAX_KEYPASSPHRASE_LEN 128
 #define MAX_SSID_LEN 33
@@ -41,12 +46,60 @@ int platform_pre_init()
     return 0;
 }
 
-int platform_post_init(wifi_vap_info_map_t *vap_map)
+#if HAL_IPC
+int platform_post_init(wifi_hal_post_init_t *post_init_struct)
 {
-    wifi_hal_dbg_print("%s: \n", __FUNCTION__);
+    app_get_ap_assoc_dev_diag_res3_t get_diag_res3_fn           = NULL;
+    app_get_neighbor_ap2_t           get_neighbor_ap2_fn        = NULL;
+    app_get_radio_channel_stats_t    get_radio_channel_stats_fn = NULL;
+    app_get_radio_traffic_stats_t    get_radio_traffic_stats_fn = NULL;
+    wifi_hal_dbg_print("%s: Enter.\n", __FUNCTION__);
 
+    if (post_init_struct->app_info->app_get_ap_assoc_dev_diag_res3_fn) {
+        get_diag_res3_fn = post_init_struct->app_info->app_get_ap_assoc_dev_diag_res3_fn;
+        hal_ipc_server_set_ap_assoc_dev_diag_res3_callback(get_diag_res3_fn);
+    } else {
+        wifi_hal_dbg_print("%s: HAL IPC unable to get AP associated device diagnostic result3 due to callback not provided.\n", __FUNCTION__);
+    }
+
+    if (post_init_struct->app_info->app_get_neighbor_ap2_fn) {
+        get_neighbor_ap2_fn = post_init_struct->app_info->app_get_neighbor_ap2_fn;
+        hal_ipc_server_set_neighbor_ap2_callback(get_neighbor_ap2_fn);
+    } else {
+        wifi_hal_dbg_print("%s: HAL IPC unable to get neighbor results due to callback not provided.\n", __FUNCTION__);
+    }
+
+    if (post_init_struct->app_info->app_get_radio_channel_stats_fn) {
+        get_radio_channel_stats_fn = post_init_struct->app_info->app_get_radio_channel_stats_fn;
+        hal_ipc_server_set_radio_channel_stats_callback(get_radio_channel_stats_fn);
+    } else {
+        wifi_hal_dbg_print("%s: HAL IPC unable to get radio channel stats due to callback not provided.\n", __FUNCTION__);
+    }
+
+    // if (post_init_struct->app_info->app_get_radio_traffic_stats_fn) {
+    //     get_radio_traffic_stats_fn = post_init_struct->app_info->app_get_radio_traffic_stats_fn;
+    //     hal_ipc_server_set_radio_traffic_stats_callback(get_radio_traffic_stats_fn);
+    // } else {
+    //     wifi_hal_dbg_print("%s: HAL IPC unable to get radio traffic stats due to callback not provided.\n", __FUNCTION__);
+    // }
+
+    wifi_hal_dbg_print("%s: HAL IPC init.\n", __FUNCTION__);
+
+    if(hal_ipc_init() != 0){
+        wifi_hal_dbg_print("%s:%d: failed to start HAL IPC sync call server.\n",__func__, __LINE__);
+    } else {
+        wifi_hal_dbg_print("%s: HAL IPC sync call server started.\n", __FUNCTION__);
+    }
+    wifi_hal_dbg_print("%s: Exit.\n", __FUNCTION__);
     return 0;
 }
+#else
+int platform_post_init(wifi_vap_info_map_t *vap_map)
+{
+    wifi_hal_dbg_print("%s: Enter.\n", __FUNCTION__);
+    return 0;
+}
+#endif
 
 int nvram_get_current_password(char *l_password, int vap_index)
 {
@@ -842,3 +895,181 @@ int nvram_get_mgmt_frame_power_control(int vap_index, int* output_dbm)
 {
     return 0;
 }
+
+int platform_get_vendor_oui (char *vendor_oui, int vendor_oui_len)
+{
+    return -1;
+}
+
+#if HAL_IPC
+//==================================================================================================
+// HAL API stubs
+// because for HAL-IPC feature usage hal-wifi-generic(HAL-IPC client) was unlinked from rdk-wifihal(HAL-IPC server) and OneWifi(target user)
+// we need to provide definitions of some functions used by rdk-wifi-hal and/or OneWifi
+
+//--------------------------------------------------------------------------------------------------
+// NOTE: to be removed after MxL provide implementation
+INT wifi_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, INT dwell_time, UINT chan_num, UINT *chan_list)
+{
+    return RETURN_OK;
+}
+
+//--------------------------------------------------------------------------------------------------
+// NOTE: to be removed after MxL provide implementation
+INT wifi_getNeighboringWiFiStatus(INT radio_index, wifi_neighbor_ap2_t **neighbor_ap_array, UINT *output_array_size)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getApInterworkingElement(INT apIndex, wifi_InterworkingElement_t *output_struct)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_pushApRoamingConsortiumElement(INT apIndex, wifi_roamingConsortiumElement_t *infoElement)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setApIsolationEnable(INT apIndex, BOOL enable)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setApManagementFramePowerControl(INT apIndex, INT dBm)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getApEnable(INT apIndex, BOOL *output_bool)
+{
+    return RETURN_OK;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setApMacAddressControlMode(INT apIndex, INT filterMode)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setRadioDfsAtBootUpEnable(INT radioIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getRadioChannel(INT radioIndex,ULONG *output_ulong)
+{
+    wifi_radio_info_t *radio;
+
+    radio = get_radio_by_rdk_index(radioIndex);
+
+    if (!radio)
+    {
+        return RETURN_ERR;
+    }
+
+    if (radio->configured && radio->oper_param.enable){
+        *output_ulong = radio->oper_param.channel;
+        return RETURN_OK;
+    } else {
+        return RETURN_ERR;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setProxyArp(INT apIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setCountryIe(INT apIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getLayer2TrafficInspectionFiltering(INT apIndex, BOOL *enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getCountryIe(INT apIndex, BOOL *enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setP2PCrossConnect(INT apIndex, BOOL disabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getDownStreamGroupAddress(INT apIndex, BOOL *disabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getProxyArp(INT apIndex, BOOL *enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_applyGASConfiguration(wifi_GASConfiguration_t *input_struct)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getBssLoad(INT apIndex, BOOL *enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_pushApHotspotElement(INT apIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setBssLoad(INT apIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_getApInterworkingServiceEnable(INT apIndex, BOOL *output_bool)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_sendActionFrame(INT apIndex, mac_address_t MacAddr, UINT frequency, UCHAR *frame, UINT len)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setDownStreamGroupAddress(INT apIndex, BOOL disabled)
+{
+    return RETURN_ERR;
+}
+
+//--------------------------------------------------------------------------------------------------
+INT wifi_setLayer2TrafficInspectionFiltering(INT apIndex, BOOL enabled)
+{
+    return RETURN_ERR;
+}
+#endif // HAL_IPC

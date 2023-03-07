@@ -47,7 +47,7 @@ librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/broadcom
 librdk_wifihal_la_SOURCES += ../platform/broadcom/platform.c
 endif
 
-if TCXB8_PORT 
+if TCXB8_PORT
 librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/broadcom
 librdk_wifihal_la_SOURCES += ../platform/broadcom/platform.c
 endif
@@ -55,6 +55,11 @@ endif
 if CMXB7_PORT
 librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../platform/intel
 librdk_wifihal_la_SOURCES += ../platform/intel/platform.c
+# HAL-IPC server sources
+if HAL_IPC
+librdk_wifihal_la_CPPFLAGS += -I$(top_srcdir)/../hal_ipc/server/
+librdk_wifihal_la_SOURCES += ../hal_ipc/server/hal_ipc.c ../hal_ipc/server/hal_ipc_processors.c ../hal_ipc/server/server_hal_ipc.c ../hal_ipc/server/hal_ipc_wifi_wrappers.c
+endif #HAL_IPC
 endif
 
 if SKYSR300_PORT

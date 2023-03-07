@@ -51,6 +51,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
     u16 fc;
     struct sta_info *station = NULL;
     wifi_device_callbacks_t *callbacks = NULL;
+    wifi_steering_event_t steering_evt;
     wifi_frame_t mgmt_frame;
     int sig_dbm = -100;
 
@@ -146,6 +147,21 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                     callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
                 }
             }
+
+            if (callbacks->steering_event_callback != 0) {
+                steering_evt.type = WIFI_STEERING_EVENT_CLIENT_DISCONNECT;
+                steering_evt.apIndex = vap->vap_index;
+                steering_evt.timestamp_ms = time(NULL);
+                memcpy(steering_evt.data.disconnect.client_mac, sta, sizeof(mac_address_t));
+                steering_evt.data.disconnect.reason = reason;
+                steering_evt.data.disconnect.source = DISCONNECT_SOURCE_LOCAL;
+                steering_evt.data.disconnect.type = DISCONNECT_TYPE_DISASSOC;
+
+                wifi_hal_dbg_print("%s:%d: Send Client Disassoc steering event\n", __func__, __LINE__);
+
+                callbacks->steering_event_callback(0, &steering_evt);
+            }
+
             break;
 
         case WLAN_FC_STYPE_DEAUTH:
@@ -172,6 +188,21 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                    callbacks->apDeAuthEvent_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
                 }
             }
+
+            if (callbacks->steering_event_callback != 0) {
+                steering_evt.type = WIFI_STEERING_EVENT_CLIENT_DISCONNECT;
+                steering_evt.apIndex = vap->vap_index;
+                steering_evt.timestamp_ms = time(NULL);
+                memcpy(steering_evt.data.disconnect.client_mac, sta, sizeof(mac_address_t));
+                steering_evt.data.disconnect.reason = reason;
+                steering_evt.data.disconnect.source = DISCONNECT_SOURCE_LOCAL;
+                steering_evt.data.disconnect.type = DISCONNECT_TYPE_DEAUTH;
+
+                wifi_hal_dbg_print("%s:%d: Send Client Deauth steering event\n", __func__, __LINE__);
+
+                callbacks->steering_event_callback(0, &steering_evt);
+            }
+
             break;
 
         case WLAN_FC_STYPE_PROBE_RESP:

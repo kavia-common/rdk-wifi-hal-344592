@@ -47,6 +47,7 @@ AM_CONDITIONAL([XLE_PORT], [test "x$XLE_PORT" = "xtrue"])
 AM_CONDITIONAL([TCXB8_PORT], [test "x$TCXB8_PORT" = "xtrue"])
 AM_CONDITIONAL([SKYSR213_PORT], [test "x$SKYSR213_PORT" = "xtrue"])
 AM_CONDITIONAL([CMXB7_PORT], [test "x$CMXB7_PORT" = "xtrue"])
+AM_CONDITIONAL([HAL_IPC], [test "x$HAL_IPC" = "xtrue"])
 
 AC_PREFIX_DEFAULT(`pwd`)
 AC_ENABLE_SHARED
