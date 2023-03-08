@@ -158,18 +158,18 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
         if (operationParam->autoChannelEnabled == true) {
             /* Set acsd2 autochannel select mode */
             wifi_hal_dbg_print("%s():%d Enabling autoChannel in radio index %d\n", __FUNCTION__, __LINE__, index);
-            sprintf(cmd, "acs_cli2 -i wl%d mode 2", index);
+            sprintf(cmd, "acs_cli2 -i wl%d mode 2 &", index);
             system(cmd);
 
             /* Run acsd2 autochannel */
             memset(cmd, 0 ,sizeof(cmd));
-            sprintf(cmd, "acs_cli2 -i wl%d autochannel", index);
+            sprintf(cmd, "acs_cli2 -i wl%d autochannel &", index);
             system(cmd);
         }
         else {
             /* Set acsd2 disabled mode */
             wifi_hal_dbg_print("%s():%d Disabling autoChannel in radio index %d\n", __FUNCTION__, __LINE__, index);
-            sprintf(cmd, "acs_cli2 -i wl%d mode 0", index);
+            sprintf(cmd, "acs_cli2 -i wl%d mode 0 &", index);
             system(cmd);
         }
     }
