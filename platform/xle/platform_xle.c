@@ -1,8 +1,75 @@
 #include <stddef.h>
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
+#include "secure_wrapper.h"
 
 #define BUFFER_LENGTH_WIFIDB 256
+
+/* API to get encrypted default psk and ssid. */
+static int get_default_encrypted_password (char* password);
+static int get_default_encrypted_ssid (char* ssid);
+
+/* Get default encrypted PSK key. */
+static int get_default_encrypted_password (char* password) {
+
+    if (NULL == password) {
+        wifi_hal_error_print("%s:%d Invalid parameter \r\n", __func__, __LINE__);
+        return -1;
+    }
+
+    const char* default_pwd_encrypted_key = "onewifidefaultcred";
+    FILE* fp = NULL;
+    char default_decrypted_pwd[128] = {0};
+    char *result = NULL;
+
+    fp = v_secure_popen("r", "/usr/bin/GetConfigFile %s stdout", default_pwd_encrypted_key);
+    if (NULL == fp) {
+         wifi_hal_error_print("%s:%d Failed to read GetConfigFile \n", __func__, __LINE__);
+         return -1;
+    }
+
+    if ((result = fgets(default_decrypted_pwd, sizeof(default_decrypted_pwd), fp)) == NULL) {
+        wifi_hal_error_print("%s:%d Failed to read encrypted password \n",__func__, __LINE__);
+        v_secure_pclose(fp);
+        return -1;
+    }
+
+    v_secure_pclose(fp);
+    //copy password.
+    strncpy(password, default_decrypted_pwd, strlen(default_decrypted_pwd) + 1);
+    return 0;
+}
+
+/* Get default encrypted SSID. */
+static int get_default_encrypted_ssid (char* ssid) {
+
+    if (NULL == ssid) {
+        wifi_hal_error_print("%s:%d Invalid parameter \r\n", __func__, __LINE__);
+        return -1;
+    }
+
+    const char* default_ssid_encrypted_key = "onewifidefaultssid";
+    FILE* fp = NULL;
+    char default_decrypted_ssid[128] = {0};
+    char *result = NULL;
+
+    fp = v_secure_popen("r", "/usr/bin/GetConfigFile %s stdout", default_ssid_encrypted_key);
+    if (NULL == fp) {
+         wifi_hal_error_print("%s:%d Failed to read GetConfigFile \n", __func__, __LINE__);
+         return -1;
+    }
+
+    if ((result = fgets(default_decrypted_ssid, sizeof(default_decrypted_ssid), fp)) == NULL) {
+        wifi_hal_error_print("%s:%d Failed to read encrypted ssid \n",__func__, __LINE__);
+        v_secure_pclose(fp);
+        return -1;
+    }
+
+    v_secure_pclose(fp);
+    //copy ssid.
+    strncpy(ssid, default_decrypted_ssid, strlen(default_decrypted_ssid) + 1);
+    return 0;
+}
 
 extern char *wlcsm_nvram_get(char *name);
 
@@ -76,7 +143,7 @@ int nvram_get_default_password(char *l_password, int vap_index)
 int platform_get_keypassphrase_default(char *password, int vap_index)
 {
     if(is_wifi_hal_vap_mesh_sta(vap_index)) {
-        return nvram_get_default_password(password, vap_index);
+        return get_default_encrypted_password(password);
     }else {
         strncpy(password,"123456789",strlen("123456789")+1);
         return 0;
@@ -103,59 +170,20 @@ int platform_get_radius_key_default(char *radius_key)
 
 int platform_get_ssid_default(char *ssid, int vap_index){
     char *str = NULL;
-//    char value[BUFFER_LENGTH_WIFIDB] = {0};
-//    FILE *fp = NULL;
-
-    if(is_wifi_hal_vap_private(vap_index)) {
-        strcpy(ssid, "OneWifi-XLE"); /* remove this and read the factory defaults below */
-        return 0;
-#if 0
-        fp = popen("grep \"Default 2.4 GHz SSID:\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
-
-        if(fp != NULL) {
-            while (fgets(value, sizeof(value), fp) != NULL){
-                strncpy(ssid,value,strlen(value)-1);
-            }
-            pclose(fp);
-            return 0;
+    if(is_wifi_hal_vap_mesh_sta(vap_index)) {
+        char default_ssid[128] = {0};
+        if (get_default_encrypted_ssid(default_ssid) == -1) {
+            //Failed to get encrypted ssid.
+            str = "OutOfService";
+            strncpy(ssid,str,strlen(str)+1);
+        }else {
+            strncpy(ssid,default_ssid,strlen(default_ssid)+1);
         }
-#endif
-    }else if(is_wifi_hal_vap_xhs(vap_index)) {
-        strcpy(ssid, "OneWifi-XLE"); /* remove this and read the factory defaults below */
-        return 0;
-#if 0
-        fp = popen("grep \"Default XHS SSID for 2.4GHZ and 5.0GHZ:\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
-
-        if(fp != NULL) {
-            while (fgets(value, sizeof(value), fp) != NULL){
-                strncpy(ssid,value,strlen(value)-1);
-            }
-            pclose(fp);
-            return 0;
-        }
-#endif
-    }else if(is_wifi_hal_vap_lnf_psk(vap_index)) {
-        str = "A16746DF2466410CA2ED9FB2E32FE7D9";
-        strncpy(ssid,str,strlen(str)+1);
-        return 0;
-    }else if(is_wifi_hal_vap_lnf_radius(vap_index)) {
-        str = "D375C1D9F8B041E2A1995B784064977B";
-        strncpy(ssid,str,strlen(str)+1);
-        return 0;
-    }else if(is_wifi_hal_vap_mesh_backhaul(vap_index)){
-        str = "we.piranha.off";
-        strncpy(ssid,str,strlen(str)+1);
-        return 0;
-    }else if(is_wifi_hal_vap_mesh_sta(vap_index)) {
-        str = "we.connect.yellowstone";
-        strncpy(ssid,str,strlen(str)+1);
-        return 0;
     }else {
         str = "OutOfService";
         strncpy(ssid,str,strlen(str)+1);
-        return 0;
     }
-    return -1;
+    return 0;
 }
 
 int platform_get_wps_pin_default(char *pin)
