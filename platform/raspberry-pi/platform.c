@@ -26,6 +26,11 @@ int platform_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     return 0;
 }
 
+int nvram_get_vap_enable_status(bool *vap_enable, int vap_index)
+{
+    return 0;
+}
+
 int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap_index)
 {
     return 0;

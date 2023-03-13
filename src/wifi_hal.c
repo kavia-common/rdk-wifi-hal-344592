@@ -686,7 +686,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 
         if (vap->vap_mode == wifi_vap_mode_ap) {
             // create the bridge
-            if (vap->bridge_name[0] != '\0') {
+            if (vap->bridge_name[0] != '\0' && vap->u.bss_info.enabled) {
                 if ((nl80211_create_bridge(interface->name, vap->bridge_name) != 0) ||
                         (nl80211_interface_enable(vap->bridge_name, true) != 0)) {
                     wifi_hal_info_print("Failed to bounce interface and create bridge\n");

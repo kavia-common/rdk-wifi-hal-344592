@@ -36,6 +36,12 @@ int platform_set_radio_pre_init(wifi_radio_index_t index, wifi_radio_operationPa
     return 0;
 }
 
+int nvram_get_vap_enable_status(bool *vap_enable, int vap_index)
+{
+    wifi_hal_dbg_print("%s \n", __func__);
+    return 0;
+}
+
 int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap_index)
 {
     wifi_hal_dbg_print("%s \n", __func__);

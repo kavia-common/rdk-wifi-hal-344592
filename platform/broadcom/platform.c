@@ -235,6 +235,23 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     return 0;
 }
 
+int nvram_get_vap_enable_status(bool *vap_enable, int vap_index)
+{
+    char interface_name[10];
+    char nvram_name[NVRAM_NAME_SIZE];
+
+    memset(interface_name, 0, sizeof(interface_name));
+    get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
+
+    snprintf(nvram_name, sizeof(nvram_name), "%s_vap_enabled", interface_name);
+    char *enable = wlcsm_nvram_get(nvram_name);
+
+    *vap_enable = (!enable || *enable == '0') ? FALSE : TRUE;
+    wifi_hal_dbg_print("%s:%d: vap enable status:%d for vap index:%d \r\n", __func__, __LINE__, *vap_enable, vap_index);
+
+    return 0;
+}
+
 int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap_index)
 {
     char nvram_name[NVRAM_NAME_SIZE];
@@ -669,6 +686,12 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
 
             prepare_param_name(param_name, interface_name, "_ap_isolate");
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.isolation);
+
+            prepare_param_name(param_name, interface_name, "_vap_enabled");
+            set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.enabled);
+
+            prepare_param_name(param_name, interface_name, "_bss_enabled");
+            set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.enabled);
 
             prepare_param_name(param_name, interface_name, "_closed");
             set_decimal_nvram_param(param_name, interface->u.ap.conf.ignore_broadcast_ssid);
