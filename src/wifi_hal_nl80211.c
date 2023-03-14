@@ -305,10 +305,14 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         break;
 
     case WLAN_FC_STYPE_ASSOC_REQ:
-        /* fall through */
-    case WLAN_FC_STYPE_REASSOC_REQ:
         mgmt_type = WIFI_MGMT_FRAME_TYPE_ASSOC_REQ;
         wifi_hal_dbg_print("%s:%d: Received assoc frame from: %s\n", __func__, __LINE__,
+                           to_mac_str(sta, sta_mac_str));
+        break;
+
+    case WLAN_FC_STYPE_REASSOC_REQ:
+        mgmt_type = WIFI_MGMT_FRAME_TYPE_REASSOC_REQ;
+        wifi_hal_dbg_print("%s:%d: Received reassoc frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
         break;
 
