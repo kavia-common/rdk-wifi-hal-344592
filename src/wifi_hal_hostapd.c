@@ -265,6 +265,11 @@ void init_hostap_bss(wifi_interface_info_t *interface)
      * completed and tested with other implementations. */
     conf->tls_flags = TLS_CONN_DISABLE_TLSv1_3;
 
+#if HOSTAPD_VERSION >= 210 //2.10
+    conf->max_auth_rounds = 100;
+    conf->max_auth_rounds_short = 50;
+#endif
+
     conf->send_probe_response = 1;
 
 #ifdef CONFIG_HS20
