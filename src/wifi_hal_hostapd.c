@@ -1319,9 +1319,11 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     }
 
     if (param->variant & WIFI_80211_VARIANT_AX) {
-        iconf->hw_mode = HOSTAPD_MODE_IEEE80211A;
+        iconf->hw_mode = HOSTAPD_MODE_IEEE80211ANY;
+        if (param->band == WIFI_FREQUENCY_5_BAND) {
+            iconf->ieee80211ac = 1;
+        }
         iconf->ieee80211ax = 1;
-        iconf->ieee80211ac = 1;
         iconf->ieee80211n = 1;
         //iconf->require_ht = 1;
         //iconf->require_vht = 1;
