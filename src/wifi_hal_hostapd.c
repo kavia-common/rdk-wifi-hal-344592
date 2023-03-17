@@ -1133,7 +1133,7 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     iconf->airtime_update_interval = AIRTIME_DEFAULT_UPDATE_INTERVAL;
     iconf->airtime_mode = AIRTIME_MODE_STATIC;
 #endif /* CONFIG_AIRTIME_POLICY */
-    iconf->ieee80211h = 0;
+    iconf->ieee80211h = 1;
     iconf->ieee80211d = 1; // This support includes the addition of a country information element to beacons, probe requests, and probe responses
 
     iconf->acs = param->autoChannelEnabled;
