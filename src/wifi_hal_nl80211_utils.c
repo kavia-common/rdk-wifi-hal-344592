@@ -150,6 +150,8 @@ wifi_interface_name_idex_map_t interface_index_map[] = {
     {2, 2,  "wl2",     "",         0,     23,     "mesh_sta_6g"},
     {2, 2,  "wl2.1",   "brlan0",   100,   16,     "private_ssid_6g"},
     {2, 2,  "wl2.2",   "brlan1",   101,   17,     "iot_ssid_6g"},
+    {2, 2,  "wl2.3",   "bropen6g", 2253,   18,     "hotspot_open_6g"},
+    {2, 2,  "wl2.5",   "brsecure6g",2256,  20,     "hotspot_secure_6g"},
 #if 0
     {2, 2,  "wl2.4",   "brlan6",   106,   19,     "lnf_psk_6g"},
     {2, 2,  "wl2.6",   "br106",    106,   21,     "lnf_radius_6g"},
@@ -1153,11 +1155,13 @@ int get_security_mode_support_radius(int mode)
     return sec_mode;
 }
 
-int get_security_mode_int_from_str(char *security_mode_str,wifi_security_modes_t *security_mode)
+int get_security_mode_int_from_str(char *security_mode_str,char *mfp_str,wifi_security_modes_t *security_mode)
 {
 
     if(strcmp(security_mode_str, "None") == 0) {
         *security_mode = wifi_security_mode_none;
+    } else if (strcmp(security_mode_str, "owe") == 0) {
+        *security_mode = wifi_security_mode_enhanced_open;
     } else if (strcmp(security_mode_str, "psk") == 0) {
         *security_mode = wifi_security_mode_wpa_personal;
     } else if (strcmp(security_mode_str, "psk2") == 0) {
@@ -1170,18 +1174,18 @@ int get_security_mode_int_from_str(char *security_mode_str,wifi_security_modes_t
         *security_mode = wifi_security_mode_wpa3_transition;
     } else if (strcmp(security_mode_str, "wpa") == 0) {
         *security_mode = wifi_security_mode_wpa_enterprise;
-    } else if (strcmp(security_mode_str, "wpa2") == 0) {
+    } else if ((strcmp(security_mode_str, "wpa2") == 0) && (strcmp(mfp_str, "2") != 0 )) {
         *security_mode = wifi_security_mode_wpa2_enterprise;
-    } else if (strcmp(security_mode_str, "wpa2") == 0) {
+    } else if ((strcmp(security_mode_str, "wpa2") == 0) && (strcmp(mfp_str, "2") == 0 )){
         *security_mode = wifi_security_mode_wpa3_enterprise;
     } else if (strcmp(security_mode_str, "wpa wpa2") == 0) {
         *security_mode = wifi_security_mode_wpa_wpa2_enterprise;
     } else {
-        wifi_hal_error_print("%s:%d: wifi security mode not found:[%s]\r\n",__func__, __LINE__, security_mode_str);
+        wifi_hal_error_print("%s:%d: wifi security mode not found:[%s:%s]\r\n",__func__, __LINE__, security_mode_str,mfp_str);
         return RETURN_ERR;
     }
 
-    wifi_hal_dbg_print("%s:%d: security mode %d string %s \r\n",__func__, __LINE__, *security_mode,security_mode_str);
+    wifi_hal_dbg_print("%s:%d: security mode %d string %s and mfp is %s\r\n",__func__, __LINE__, *security_mode,security_mode_str,mfp_str);
     return RETURN_OK;
 }
 
@@ -1190,6 +1194,10 @@ int get_security_mode_str_from_int(wifi_security_modes_t security_mode, char *se
     switch (security_mode) {
     case wifi_security_mode_none:
         strcpy(security_mode_str, "None");
+        break;
+
+    case wifi_security_mode_enhanced_open:
+        strcpy(security_mode_str, "owe");
         break;
 
     case wifi_security_mode_wpa_personal:

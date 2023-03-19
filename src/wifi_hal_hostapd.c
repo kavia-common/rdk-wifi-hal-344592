@@ -414,11 +414,15 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
     conf->wpa = 0;
     memset(&test_ip, 0, sizeof(test_ip));
 
+
     switch (sec->mode) {
         case wifi_security_mode_none:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_NONE;
             break;
 
+        case wifi_security_mode_enhanced_open:
+            conf->wpa_key_mgmt = WPA_KEY_MGMT_OWE;
+            break;
         case wifi_security_mode_wpa_personal:
         case wifi_security_mode_wpa2_personal:
         case wifi_security_mode_wpa_wpa2_personal:
@@ -432,11 +436,16 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             conf->ieee802_1x = 1;
             break;
         case wifi_security_mode_wpa3_personal:
-        case wifi_security_mode_wpa3_enterprise:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_SAE;
 #if HOSTAPD_VERSION >= 210 //2.10
             conf->sae_pwe = 1;  /* 0 = Hunt-and-Peck, 1 = Hash-to-Element, 2 = both */
 #endif
+            break;
+        case wifi_security_mode_wpa3_enterprise:
+            conf->wpa_key_mgmt = WPA_KEY_MGMT_IEEE8021X_SHA256;
+            conf->group_mgmt_cipher= WPA_CIPHER_AES_128_CMAC;
+            conf->ieee802_1x = 1;
+
             break;
         case wifi_security_mode_wpa3_transition:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
@@ -475,11 +484,15 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             break;
     }
 #endif
-
+    
+    wifi_hal_dbg_print("%s:%d: security:%d mfp:%d wpa_key_mgmt:%d 11w:%d\n",
+                       __func__, __LINE__, sec->mode, sec->mfp, conf->wpa_key_mgmt, conf->ieee80211w);
+  
     if (conf->wpa_key_mgmt != -1) {
-        conf->ieee802_1x = (conf->wpa_key_mgmt == WPA_KEY_MGMT_IEEE8021X ? 1 : 0);
+        conf->ieee802_1x = (((conf->wpa_key_mgmt == WPA_KEY_MGMT_IEEE8021X) ||(conf->wpa_key_mgmt ==  WPA_KEY_MGMT_IEEE8021X_SHA256))? 1 : 0);
         //eap_server
-        conf->eap_server = (conf->wpa_key_mgmt == WPA_KEY_MGMT_IEEE8021X ? 0: 1);
+        conf->eap_server = (((conf->wpa_key_mgmt == WPA_KEY_MGMT_IEEE8021X) ||(conf->wpa_key_mgmt ==  WPA_KEY_MGMT_IEEE8021X_SHA256))? 0 : 1);
+       
     } else {
         conf->wpa = 0;
     }
@@ -490,6 +503,7 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
         case wifi_security_mode_wpa3_personal:
         case wifi_security_mode_wpa3_enterprise:
         case wifi_security_mode_wpa3_transition:
+        case wifi_security_mode_enhanced_open:
             conf->wpa = 2;
             break;
 
@@ -1768,6 +1782,13 @@ void update_wpa_sm_params(wifi_interface_info_t *interface)
             wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_IEEE8021X);
         else if (sec->mode == wifi_security_mode_none)
             wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_NONE);
+
+        else if (sec->mode == wifi_security_mode_wpa3_enterprise ){
+            wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_GCMP_256);
+            wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_GCMP_256);
+            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT,WPA_KEY_MGMT_IEEE8021X_SHA256);
+        } else if (sec->mode == wifi_security_mode_enhanced_open )
+            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_OWE);
         else {
             wifi_hal_error_print("Unsupported security mode : 0x%x\n", sec->mode);
             return;
@@ -1898,7 +1919,7 @@ void update_eapol_sm_params(wifi_interface_info_t *interface)
         eapol_sm_notify_eap_success(interface->u.sta.wpa_sm->eapol, 1);
         eapol_sm_notify_eap_fail(interface->u.sta.wpa_sm->eapol, 0);
 
-        if (sec->mode == wifi_security_mode_wpa2_enterprise) {
+        if (sec->mode == wifi_security_mode_wpa2_enterprise || sec->mode == wifi_security_mode_wpa3_enterprise) {
             switch (sec->u.radius.eap_type) {
                 case WIFI_EAP_TYPE_PWD:
                     interface->u.sta.wpa_eapol_config.identity = (unsigned char *)&sec->u.radius.identity;

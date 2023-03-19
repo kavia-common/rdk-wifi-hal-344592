@@ -364,7 +364,7 @@ int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap
 {
     char nvram_name[NVRAM_NAME_SIZE];
     char interface_name[8];
-    char *sec_mode_str;
+    char *sec_mode_str, *mfp_str;
     wifi_security_modes_t current_security_mode;
 
     memset(interface_name, 0, sizeof(interface_name));
@@ -375,8 +375,14 @@ int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap
         wifi_hal_error_print("%s:%d nvram sec_mode value is NULL\r\n", __func__, __LINE__);
         return -1;
     }
+    snprintf(nvram_name, sizeof(nvram_name), "%s_mfp", interface_name);
+    mfp_str = wlcsm_nvram_get(nvram_name);
+    if (mfp_str == NULL) {
+        wifi_hal_error_print("%s:%d nvram mfp value is NULL\r\n", __func__, __LINE__);
+        return -1;
+    }
 
-    if (get_security_mode_int_from_str(sec_mode_str, &current_security_mode) == 0) {
+    if (get_security_mode_int_from_str(sec_mode_str,mfp_str, &current_security_mode) == 0) {
         *security_mode = current_security_mode;
         return 0;
     }
