@@ -531,6 +531,245 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
 }
 
 #ifdef CMXB7_PORT
+#define MXL_VENDOR_EVENT_CSI 16
+
+#define WIFI_DRV_MAX_NR_B0          4
+#define WIFI_DRV_MAX_NR             5
+#define WIFI_DRV_MAX_NC             4
+#define WIFI_DRV_MAX_SUB_CARRIERS   48 /* Currently only 20MHz is supported for CSI*/
+#define CSI_RAW_DATA_SIZE           788
+#define CSI_MATRIX_DATA_SIZE        768
+#define CSI_TIMESTAMP_BIT_POS       24
+
+typedef signed short wifi_drv_streams_rssi_t [WIFI_DRV_MAX_NR];
+
+typedef struct _wifi_drv_frame_info {
+    unsigned char           bw_mode;
+    unsigned char           mcs;
+    unsigned char           Nr;
+    unsigned char           Nc;
+    wifi_drv_streams_rssi_t nr_rssi;
+    int32_t                 channel;
+    unsigned short          valid_mask;
+    unsigned short          phy_bw;
+    unsigned short          cap_bw;
+    int32_t                 num_sc;
+    unsigned char           decimation;
+    uint64_t                time_stamp;
+} __attribute__((aligned(1), packed)) wifi_drv_frame_info_t;
+
+typedef struct _wifi_drv_csi_data_t {
+    wifi_drv_frame_info_t frame_info;
+    int csi_raw_data[CSI_RAW_DATA_SIZE];
+} wifi_drv_csi_data_t;
+
+typedef struct _wifi_csi_driver_nl_event_data_t {
+    mac_address_t sta_addr; /* Station MAC addr */
+    wifi_drv_csi_data_t csi_data;
+} wifi_csi_driver_nl_event_data_t;
+
+static inline int min(int a, int b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+/*
+Function    : _wlan_wifi_parse_csi_matrix
+Description : This function is a parser to convert the CSI Raw Data to CSI Matrix.
+The owner of this parser is PHY CSI Team.
+This code is converted from Matlab Script to C code.
+Wlan SW will maintain this code as it w/o changing anything.
+ */
+void _wlan_wifi_parse_csi_matrix(const int Data[788], int output_CSI_matrix_data[],
+        int output_CSI_matrix_size[3], int *time_stamp_1,
+        int *time_stamp_2, int *error_flag)
+{
+    int CSI_matrix_B0[768];
+    int b_ants_mat[768];
+    int CSI_matrix_D2[240];
+    int ants_mat[240];
+    unsigned int index_data_arr[4];
+    int ant_num;
+    int chip_type;
+    int i;
+    unsigned int q0;
+    unsigned int qY;
+    int stream_num;
+    *time_stamp_1 = 0;
+    *time_stamp_2 = 0;
+    *error_flag = 0;
+    chip_type = 0;
+    memset(&CSI_matrix_B0[0], 0, 768U * sizeof(int));
+    memset(&CSI_matrix_D2[0], 0, 240U * sizeof(int));
+    if ((Data[0] >> 24 & 15) == 10) {
+        chip_type = Data[0] & 3;
+        /*  1-600B0, 2-600D2 */
+        if ((chip_type != 1) && (chip_type != 2)) {
+            *error_flag = 1;
+        }
+    } else {
+        *error_flag = 1;
+    }
+    if (chip_type == 2) {
+        /* wave600D2 */
+        index_data_arr[0] = 1U;
+        memset(&ants_mat[0], 0, 240U * sizeof(int));
+        /*  separate the data for different antennas */
+        for (chip_type = 0; chip_type < 245; chip_type++) {
+            i = Data[chip_type];
+            stream_num = i >> 24 & 15;
+            if ((stream_num == 10) || (stream_num == 11) || (stream_num == 12) ||
+                    (stream_num == 13) || (stream_num == 14)) {
+                if (stream_num == 12) {
+                    *time_stamp_1 = i & 65535;
+                } else if (stream_num == 13) {
+                    *time_stamp_2 = i & 16777215;
+                }
+            } else {
+                ants_mat[(int)index_data_arr[0] - 1] = i & 16777215;
+                qY = index_data_arr[0] + 1U;
+                if (index_data_arr[0] + 1U < index_data_arr[0]) {
+                    qY =  UINT32_MAX; /* replaced MAX_uint32_T with UINT32_MAX to fix compilation issue */
+                }
+                index_data_arr[0] = qY;
+            }
+        }
+        /*  arrange the data in 3 dimentional matrix (number of
+         * subcarriers)*5(antennas)*1(streams)  */
+        for (chip_type = 0; chip_type < 48; chip_type++) {
+            stream_num = chip_type * 5;
+            for (i = 0; i < 5; i++) {
+                CSI_matrix_D2[i + 5 * chip_type] = ants_mat[i + stream_num];
+            }
+        }
+        output_CSI_matrix_size[0] = 5;
+        output_CSI_matrix_size[1] = 1;
+        output_CSI_matrix_size[2] = 48;
+        memcpy_s(&output_CSI_matrix_data[0], 240U * sizeof(int), &CSI_matrix_D2[0], 240U * sizeof(int));
+    } else {
+        if (chip_type == 1) {
+            /* wave600B0 */
+            index_data_arr[0] = 1U;
+            index_data_arr[1] = 1U;
+            index_data_arr[2] = 1U;
+            index_data_arr[3] = 1U;
+            memset(&b_ants_mat[0], 0, 768U * sizeof(int));
+            /*  separate the data for different antennas */
+            for (chip_type = 0; chip_type < 784; chip_type++) {
+                i = Data[chip_type];
+                stream_num = i >> 24 & 15;
+                ant_num = i >> 28 & 3;
+                if ((stream_num == 10) || (stream_num == 11) || (stream_num == 12) ||
+                        (stream_num == 13) || (stream_num == 14)) {
+                    if (stream_num == 12) {
+                        *time_stamp_1 = i & 65535;
+                    } else if (stream_num == 13) {
+                        *time_stamp_2 = i & 16777215;
+                    }
+                } else {
+                    b_ants_mat[((int)index_data_arr[ant_num] + 192 * ant_num) - 1] =
+                        i & 16777215;
+                    q0 = index_data_arr[ant_num];
+                    qY = q0 + 1U;
+                    if (q0 + 1U < q0) {
+                        qY =  UINT32_MAX; /* replaced MAX_uint32_T with UINT32_MAX to fix compilation issue */
+                    }
+                    index_data_arr[ant_num] = qY;
+                }
+            }
+            /*  arrange the data in 3 dimentional matrix (number of
+             * subcarriers)*4(antennas)*4(streams)  */
+            for (chip_type = 0; chip_type < 4; chip_type++) {
+                for (stream_num = 0; stream_num < 4; stream_num++) {
+                    for (i = 0; i < 48; i++) {
+                        CSI_matrix_B0[(chip_type + (stream_num << 2)) + (i << 4)] =
+                            b_ants_mat[((i << 2) + chip_type) + 192 * stream_num];
+                    }
+                }
+            }
+        }
+        output_CSI_matrix_size[0] = 4;
+        output_CSI_matrix_size[1] = 4;
+        output_CSI_matrix_size[2] = 48;
+        memcpy_s(&output_CSI_matrix_data[0], 768U * sizeof(int), &CSI_matrix_B0[0], 768U * sizeof(int));
+    }
+}
+
+static int _wlan_wifi_drv_to_hal_csi_data(wifi_csi_data_t *hal_csi, wifi_drv_csi_data_t *drv_csi)
+{
+    unsigned i, j, k, z = 0;
+    wifi_frame_info_t *hal_frame = &hal_csi->frame_info;
+    wifi_drv_frame_info_t *drv_frame = &drv_csi->frame_info;
+    int csi_matrix[CSI_MATRIX_DATA_SIZE] = { 0 };
+    int csi_matrix_size[3] = { 0 };
+    int time_stamp1, time_stamp2, csi_parsing_error = 0;
+
+    /* frame info */
+    hal_frame->bw_mode = (UCHAR)drv_frame->bw_mode;
+    hal_frame->mcs = (UCHAR)drv_frame->mcs;
+    hal_frame->Nr = (UCHAR)drv_frame->Nr;
+    hal_frame->Nc = (UCHAR)drv_frame->Nc;
+
+    for(i = 0; i < min(MAX_NR, WIFI_DRV_MAX_NR_B0); i++) {
+        hal_frame->nr_rssi[i] = (INT)drv_frame->nr_rssi[i];
+    }
+
+    hal_frame->valid_mask = (USHORT)drv_frame->valid_mask;
+    hal_frame->phy_bw = (USHORT)drv_frame->phy_bw;
+    hal_frame->cap_bw = (USHORT)drv_frame->cap_bw;
+    hal_frame->num_sc = (UINT)drv_frame->num_sc;
+    hal_frame->decimation = (UCHAR)drv_frame->decimation;
+    hal_frame->channel = (UINT)drv_frame->channel;
+
+    /* CSI matrix */
+    _wlan_wifi_parse_csi_matrix(drv_csi->csi_raw_data, csi_matrix, csi_matrix_size, &time_stamp1, &time_stamp2, &csi_parsing_error);
+
+    if (csi_parsing_error) {
+        wifi_hal_error_print("%s:%d: Error in parsing CSI raw data \n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    hal_frame->time_stamp = (((ULLONG)time_stamp1 << CSI_TIMESTAMP_BIT_POS) | (ULLONG)time_stamp2);
+    for(i = 0; i < min(MAX_SUB_CARRIERS, WIFI_DRV_MAX_SUB_CARRIERS); i++) {
+        for(j = 0; j < min(MAX_NR, WIFI_DRV_MAX_NR_B0); j++) {
+            for(k = 0; k < min(MAX_NC, WIFI_DRV_MAX_NC); k++) {
+                hal_csi->csi_matrix[i][j][k] = (UINT)csi_matrix[z++];
+            }
+        }
+    }
+
+    return RETURN_OK;
+
+    /* EVM matrix not supported */
+}
+
+void prepare_to_call_process_csi(unsigned char *data, size_t len)
+{
+    wifi_csi_data_t  *cli_CsiData = NULL;
+    wifi_drv_csi_data_t *driver_csi = NULL;
+    wifi_csi_driver_nl_event_data_t *csi_nl_data = NULL;
+    cli_CsiData = calloc(1, sizeof(wifi_csi_data_t));
+    csi_nl_data = (wifi_csi_driver_nl_event_data_t *)data;
+    driver_csi = (wifi_drv_csi_data_t *) &(csi_nl_data->csi_data);
+
+    wifi_device_callbacks_t *callbacks;
+    callbacks = get_hal_device_callbacks();
+
+    wifi_hal_dbg_print("%s:%d: Vendor data len is %d and data is %p\n", __func__, __LINE__, len, data);
+
+    _wlan_wifi_drv_to_hal_csi_data(cli_CsiData, driver_csi);
+
+    if (callbacks && callbacks->csi_callback) {
+        callbacks->csi_callback(csi_nl_data->sta_addr, cli_CsiData);
+    } else {
+        wifi_hal_dbg_print("%s: wifi csi callback is NULL\n", __FUNCTION__);
+    }
+    free(cli_CsiData);
+}
+
 /******************************************************************************/
 /*! \brief      Handle Flush station event from driver
  *
@@ -550,41 +789,30 @@ static void ltq_nl80211_handle_flush_stations(struct hostapd_data *hapd,
     drv_event_ltq_flush_stations(hapd, data, len);
 }
 
-/******************************************************************************/
-/*! \brief      Handle Intel vendor events from driver
- *
- *  \param[in]  interface pointer to wifi_interface_info_t
- *  \param[in]  subcmd   Sub command ID, must be from 'enum ltq_nl80211_vendor_events'
- *  \param[in]  data     pointer to data
- *  \param[in]  len      data size, variable size
- *
- *  \note       \a interface is not NULL
- *
- *  \return     void
- */
-static void nl80211_vendor_event_ltq(wifi_interface_info_t *interface,
-                    u32 subcmd, u8 *data, size_t len)
+void nl80211_vendor_event_ltq(wifi_interface_info_t *interface, unsigned int subcmd, unsigned char *data, size_t len)
 {
     struct hostapd_data *hapd = &interface->u.ap.hapd;
     switch (subcmd) {
         case LTQ_NL80211_VENDOR_EVENT_FLUSH_STATIONS:
             ltq_nl80211_handle_flush_stations(hapd, data, len);
             break;
+        case MXL_VENDOR_EVENT_CSI:
+            prepare_to_call_process_csi(data,len);
+            break;
         default:
             wifi_hal_dbg_print("%s:%d: nl80211: Ignore unsupported LTQ vendor event %u\n",  __func__, __LINE__, subcmd);
             break;
     }
 }
+
 #endif // CMXB7_PORT
 
 static void nl80211_vendor_event(wifi_interface_info_t *interface,
                     struct nlattr **tb)
 {
-    u32 vendor_id, subcmd, wiphy = 0;
-#ifdef CMXB7_PORT
-    u8 *data = NULL;
+    unsigned int vendor_id, subcmd, wiphy = 0;
+    unsigned char *data = NULL;
     size_t len = 0;
-#endif
 
     if (!tb[NL80211_ATTR_VENDOR_ID] ||
         !tb[NL80211_ATTR_VENDOR_SUBCMD])
@@ -598,6 +826,12 @@ static void nl80211_vendor_event(wifi_interface_info_t *interface,
 
     wifi_hal_dbg_print("%s:%d: nl80211: Vendor event: wiphy=%u vendor_id=0x%x subcmd=%u\n",
             __func__, __LINE__, wiphy, vendor_id, subcmd);
+
+    if (tb[NL80211_ATTR_VENDOR_DATA]) {
+        data = nla_data(tb[NL80211_ATTR_VENDOR_DATA]);
+        len = nla_len(tb[NL80211_ATTR_VENDOR_DATA]);
+        wifi_hal_dbg_print("%s:%d: nl80211: len %d data %p\n", __func__, __LINE__, len, data);
+    }
 
     switch (vendor_id) {
 #ifdef CMXB7_PORT

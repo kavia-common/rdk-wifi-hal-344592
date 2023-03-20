@@ -1525,6 +1525,20 @@ INT wifi_chan_event_register(wifi_chan_event_CB_t event_cb)
     return RETURN_OK;
 }
 
+#ifdef CMXB7_PORT
+void wifi_csi_callback_register(wifi_csi_callback callback_proc)
+{
+    wifi_device_callbacks_t *callbacks;
+
+    callbacks = get_hal_device_callbacks();
+    if (callbacks == NULL) {
+        return;
+    }
+
+    callbacks->csi_callback = callback_proc;
+}
+#endif
+
 wifi_device_callbacks_t *get_hal_device_callbacks()
 {
     return &g_wifi_hal.device_callbacks;
