@@ -1701,7 +1701,7 @@ int get_vap_state(const char *ifname, short *flags)
     strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        wifi_hal_error_print("socket error %s\n", strerror(errno));
+        wifi_hal_error_print("%s %d socket error %s\n", __func__, __LINE__, strerror(errno));
         return -1;
     }
 
@@ -1975,7 +1975,7 @@ int nl80211_interface_enable(const char *ifname, bool enable)
     strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        wifi_hal_error_print("socket error %s\n", strerror(errno));
+        wifi_hal_error_print("%s:%d socket error %s\n", __func__, __LINE__, strerror(errno));
         return -1;
     }
 
@@ -4247,7 +4247,7 @@ int nl80211_enable_ap(wifi_interface_info_t *interface, bool enable)
     wifi_hal_dbg_print("%s:%d: %s ap on interface: %d\n", __func__, __LINE__,
         enable ? "Starting" : "Stopping", interface->index);
     if ((ret = send_and_recv(msg, ap_enable_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_error_print("%s:%d: Error stopping/starting ap: %s\n", __func__, __LINE__, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Error stopping/starting ap: %d (%s) \n", __func__, __LINE__, ret, strerror(-ret));
         return RETURN_ERR;
     }
 
@@ -4285,7 +4285,7 @@ int nl80211_delete_interface(wifi_radio_info_t *radio, wifi_interface_info_t *in
             interface->name, interface->index, radio->index);
 
     if ((ret = send_and_recv(msg, interface_del_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_dbg_print("%s:%d: Error in deleting interface: %s\n", __func__, __LINE__, strerror(-ret));
+        wifi_hal_dbg_print("%s:%d: Error in deleting interface: %d (%s) \n", __func__, __LINE__, ret, strerror(-ret));
         return -1;
     }
 
@@ -4346,8 +4346,8 @@ int nl80211_init_primary_interfaces()
         nla_put_u32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_AP);
 
         if ((ret = send_and_recv(msg, interface_info_handler, &g_wifi_hal, NULL, NULL))) {
-            wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %s\n",
-                __func__, __LINE__, interface->name, radio->index, strerror(-ret));
+            wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %d (%s) \n",
+                __func__, __LINE__, interface->name, radio->index, ret, strerror(-ret));
             return -1;
         }
         nl80211_interface_enable(primary_interface->name, true);
@@ -4701,8 +4701,8 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
     }
 
     if ((ret = send_and_recv(msg, wiphy_set_info_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_info_print("%s:%d: Error updating dev:%d error: %s\n",
-            __func__, __LINE__, radio->index, strerror(-ret));
+        wifi_hal_info_print("%s:%d: Error updating dev:%d error: %d (%s)\n",
+            __func__, __LINE__, radio->index, ret, strerror(-ret));
 
         if(!reconfigure) {
             interface = hash_map_get_first(radio->interface_map);
@@ -4734,8 +4734,8 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
             }
 
            if ((ret = send_and_recv(msg, wiphy_set_info_handler, &g_wifi_hal, NULL, NULL))) {
-               wifi_hal_error_print("%s:%d: reconfig error, updating dev:%d error: %s ret:%d\n",
-                                  __func__, __LINE__, radio->index, strerror(-ret), ret);
+               wifi_hal_error_print("%s:%d: reconfig error, updating dev:%d error: %d (%s) \n",
+                                  __func__, __LINE__, radio->index, ret, strerror(-ret));
                return -1;
            }
            wifi_hal_info_print("%s:%d: reconfig success\n", __func__, __LINE__);
@@ -4782,8 +4782,8 @@ int nl80211_set_regulatory_domain(wifi_countrycode_type_t country_code)
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_REQ_SET_REG);
     nla_put_string(msg, NL80211_ATTR_REG_ALPHA2, alpha2);
     if ((ret = send_and_recv(msg, regulatory_domain_set_info_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_dbg_print("%s:%d: Error updating regulatory_domain error: %s\n",
-            __func__, __LINE__, strerror(-ret));
+        wifi_hal_dbg_print("%s:%d: Error updating regulatory_domain error: %d (%s)\n",
+            __func__, __LINE__, ret, strerror(-ret));
         return RETURN_ERR;
     }
     return RETURN_OK;
@@ -4860,8 +4860,8 @@ int nl80211_register_mgmt_frames(wifi_interface_info_t *interface)
             if ((-ret) == EALREADY) {
                 wifi_hal_dbg_print("%s:%d: Mgmt frames already registered\n", __func__, __LINE__);
             } else {
-                wifi_hal_error_print("%s:%d: Error registering for management frames on interface %s error: %s\n",
-                    __func__, __LINE__, interface->name, strerror(-ret));
+                wifi_hal_error_print("%s:%d: Error registering for management frames on interface %s error: %d (%s)\n",
+                    __func__, __LINE__, interface->name, ret, strerror(-ret));
                 return -1;
             }
         }
@@ -4897,8 +4897,8 @@ int nl80211_update_interface(wifi_interface_info_t *interface)
         nla_put_u32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_AP);
 
         if ((ret = send_and_recv(msg, interface_info_handler, &g_wifi_hal, NULL, NULL))) {
-            wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %s\n",
-                        __func__, __LINE__, interface->name, radio->index, strerror(-ret));
+            wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %d (%s)\n",
+                        __func__, __LINE__, interface->name, radio->index, ret, strerror(-ret));
             return -1;
         }
 
@@ -4914,8 +4914,8 @@ int nl80211_update_interface(wifi_interface_info_t *interface)
     }
 
     if ((ret = send_and_recv(msg, interface_info_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %s\n",
-            __func__, __LINE__, interface->name, radio->index, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Error updating %s interface on dev:%d error: %d (%s)\n",
+            __func__, __LINE__, interface->name, radio->index, ret, strerror(-ret));
         return -1;
     }
 
@@ -4965,8 +4965,8 @@ int nl80211_create_interface(wifi_radio_info_t *radio, wifi_vap_info_t *vap, wif
     }
 
     if ((ret = send_and_recv(msg, interface_info_handler, &g_wifi_hal, NULL, NULL))) {
-        wifi_hal_error_print("%s:%d: Error creating %s interface on dev:%d error: %s\n", __func__, __LINE__, 
-            ifname, radio->index, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Error creating %s interface on dev:%d error: %d (%s)\n", __func__, __LINE__,
+            ifname, radio->index, ret, strerror(-ret));
         return -1;
     }
 
@@ -5578,7 +5578,7 @@ int nl80211_update_beacon_params(wifi_interface_info_t *interface)
         return 0;
     }
 
-    wifi_hal_error_print("%s:%d: bacon get command failed:%s\n", __func__, __LINE__, strerror(-ret));
+    wifi_hal_error_print("%s:%d: beacon get command failed: %d (%s)\n", __func__, __LINE__, ret, strerror(-ret));
 
     return -1;
 }
@@ -8396,7 +8396,7 @@ int set_bss_param(void *priv, struct wpa_driver_ap_params *params)
     wifi_hal_info_print("Set AP isolate:%d \r\n", params->isolate);
     ret = send_and_recv(msg, NULL, NULL, NULL, NULL);
     if (ret != 0) {
-        wifi_hal_error_print("%s:%d: Failed to set bss for interface: %s error: %s\n", __func__, __LINE__, interface->name, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Failed to set bss for interface: %s error: %d(%s)\n", __func__, __LINE__, interface->name, ret, strerror(-ret));
         return -1;
     }
 
@@ -8607,7 +8607,7 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
 
     ret = send_and_recv(msg, beacon_info_handler, &g_wifi_hal, NULL, NULL);
     if (ret != 0) {
-        wifi_hal_error_print("%s:%d: Failed to set beacon parameter for interface: %s error: %s\n", __func__, __LINE__, interface->name, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Failed to set beacon parameter for interface: %s error: %d(%s)\n", __func__, __LINE__, interface->name, ret, strerror(-ret));
         return -1;
     }
 
@@ -8617,7 +8617,7 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
         if (nl80211_set_bss(interface, params->cts_protect, params->preamble,
             params->short_slot_time, params->ht_opmode,
             params->isolate, params->basic_rates) != 0) {
-            wifi_hal_dbg_print("%s:%d: Failed to set BSS for interface: %s error: %s\n", __func__, __LINE__, interface->name, strerror(-ret));
+            wifi_hal_dbg_print("%s:%d: Failed to set BSS for interface: %s error: %d(%s)\n", __func__, __LINE__, interface->name, ret, strerror(-ret));
             return -1;
         }
     }
@@ -9103,7 +9103,7 @@ int     wifi_drv_set_key(const char *ifname, void *priv, enum wpa_alg alg,
     nla_put_u8(msg, NL80211_ATTR_KEY_IDX, key_idx);
 
     if ((ret = send_and_recv(msg, NULL, (void *)-1, NULL, NULL))) {
-        wifi_hal_error_print("%s:%d: Failed new key: %s\n", __func__, __LINE__, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Failed new key: %d (%s)\n", __func__, __LINE__, ret, strerror(-ret));
         return -1;
     }
 
@@ -9183,7 +9183,7 @@ int     wifi_drv_set_key(const char *ifname, void *priv, enum wpa_alg alg,
     nla_put_u8(msg, NL80211_ATTR_KEY_IDX, params->key_idx);
 
     if ((ret = send_and_recv(msg, NULL, (void *)-1, NULL, NULL))) {
-        wifi_hal_dbg_print("%s:%d: Failed new key: %s\n", __func__, __LINE__, strerror(-ret));
+        wifi_hal_dbg_print("%s:%d: Failed new key: %d(%s)\n", __func__, __LINE__, ret, strerror(-ret));
         return -1;
     }
 
@@ -9225,7 +9225,7 @@ int     wifi_drv_set_key(const char *ifname, void *priv, enum wpa_alg alg,
     }
 
     if ((ret = send_and_recv(msg, NULL, (void *)-1, NULL, NULL))) {
-        wifi_hal_error_print("%s:%d: Failed to set key: %s\n", __func__, __LINE__, strerror(-ret));
+        wifi_hal_error_print("%s:%d: Failed to set key: %d (%s)\n", __func__, __LINE__, ret, strerror(-ret));
         return -1;
     }
 
