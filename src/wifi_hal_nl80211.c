@@ -3235,6 +3235,7 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
     mac_addr_str_t bssid_str;
     //unsigned int rsn_ie_len;
     u32 ver = 0;
+    int sel, key_mgmt = 0;
 
     vap = &interface->vap_info;
     backhaul = &interface->u.sta.backhaul;
@@ -3257,9 +3258,22 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
     if (backhaul->ie_len && (wpa_parse_wpa_ie_rsn(backhaul->ie, backhaul->ie_len, &data) == 0)) {
 	wpa_conf.wpa_group = data.group_cipher;
 	wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
-	wpa_conf.wpa_key_mgmt = data.key_mgmt;
-	wifi_hal_dbg_print("\nnl80211_connect_sta %x %x %x\n", wpa_conf.wpa_group, wpa_conf.rsn_pairwise,
-	    wpa_conf.wpa_key_mgmt);
+        if (data.key_mgmt & WPA_KEY_MGMT_NONE) {
+            wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_NONE; 
+        } else {
+            sel = (WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_PSK_SHA256) & data.key_mgmt;
+            key_mgmt = pick_akm_suite(sel); 
+
+            if (key_mgmt == -1) {
+                wifi_hal_error_print("Unsupported AKM suite: 0x%x\n", data.key_mgmt);
+                return -1;
+            }
+
+            wpa_conf.wpa_key_mgmt = key_mgmt;
+        }
+
+        wifi_hal_dbg_print("update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
+            key_mgmt);
     } else {
         if (security->encr == wifi_encryption_aes) {
             wpa_conf.wpa_group = WPA_CIPHER_CCMP;

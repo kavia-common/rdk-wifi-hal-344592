@@ -1216,6 +1216,35 @@ INT get_coutry_str_from_oper_params(wifi_radio_operationParam_t *operParams, cha
     return RETURN_OK;
 }
 
+// Based on wpa_supplicant_set_suites
+int pick_akm_suite(int sel)
+{
+    if (0) {
+#ifdef CONFIG_IEEE80211R
+    } else if (sel & WPA_KEY_MGMT_FT_PSK) {
+        wifi_hal_dbg_print("%s:%d: WPA: using KEY_MGMT FT/PSK", __func__, __LINE__);
+        return  WPA_KEY_MGMT_FT_PSK;
+#endif /* CONFIG_IEEE80211R */
+#ifdef CONFIG_IEEE80211W
+    } else if (sel & WPA_KEY_MGMT_IEEE8021X_SHA256) {
+        wifi_hal_dbg_print("%s:%d: WPA: using KEY_MGMT 802.1X with SHA256", __func__, __LINE__);
+        return  WPA_KEY_MGMT_IEEE8021X_SHA256;
+    } else if (sel & WPA_KEY_MGMT_PSK_SHA256) {
+        wifi_hal_dbg_print("%s:%d: WPA: using KEY_MGMT PSK with SHA256", __func__, __LINE__);
+        return  WPA_KEY_MGMT_PSK_SHA256;
+#endif /* CONFIG_IEEE80211W */
+    } else if (sel & WPA_KEY_MGMT_IEEE8021X) {
+       wifi_hal_dbg_print("%s:%d: WPA: using KEY_MGMT 802.1X", __func__, __LINE__);
+       return WPA_KEY_MGMT_IEEE8021X;
+    } else if (sel & WPA_KEY_MGMT_PSK) {
+        wifi_hal_dbg_print("%s:%d: WPA: using KEY_MGMT WPA-PSK", __func__, __LINE__);
+        return WPA_KEY_MGMT_PSK;
+    } else {
+        wifi_hal_dbg_print("%s:%d: WPA: Failed to select authenticated key management type", __func__, __LINE__);
+        return -1;
+    }
+}
+
 INT get_coutry_str_from_code(wifi_countrycode_type_t code, char *country)
 {
     unsigned int index = 0;
