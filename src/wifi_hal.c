@@ -547,7 +547,7 @@ INT wifi_hal_connect(INT ap_index, wifi_bss_info_t *bss)
     vap = &interface->vap_info;
     if (vap->vap_mode != wifi_vap_mode_sta) {
         wifi_hal_error_print("%s:%d:interface for vap index:%d not found\n", __func__, __LINE__, vap->vap_index);
-        return RETURN_ERR;
+        return WIFI_HAL_INVALID_ARGUMENTS;    // RDKB-45724 - Returns -4 when the ap index is not suitable for station mode
     }
 
     sta = &interface->u.sta;
@@ -596,7 +596,7 @@ INT wifi_hal_disconnect(INT ap_index)
     vap = &interface->vap_info;
     if (vap->vap_mode != wifi_vap_mode_sta) {
         wifi_hal_error_print("%s:%d:interface for vap index:%d not found\n", __func__, __LINE__, vap->vap_index);
-        return RETURN_ERR;
+        return WIFI_HAL_INVALID_ARGUMENTS;     // RDKB-45722 - Returns -4 when the ap index is not suitable for station mode
     }
 
     if (nl80211_disconnect_sta(interface) != 0) {
