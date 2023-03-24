@@ -748,9 +748,6 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
             prepare_param_name(param_name, interface_name, "_vap_enabled");
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.enabled);
 
-            prepare_param_name(param_name, interface_name, "_bss_enabled");
-            set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.enabled);
-
             prepare_param_name(param_name, interface_name, "_closed");
             set_decimal_nvram_param(param_name, interface->u.ap.conf.ignore_broadcast_ssid);
 
