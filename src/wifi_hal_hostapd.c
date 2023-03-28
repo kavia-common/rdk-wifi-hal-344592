@@ -1067,16 +1067,11 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         return RETURN_ERR;
     }
 
-#ifdef CMXB7_PORT
-    mode = &radio->hw_modes[band];
-    iface->current_rates = radio->rate_data[band];
-    iface->basic_rates = radio->basic_rates[band];
-#else
     iface->current_mode = &radio->hw_modes[band];
     iface->current_rates = radio->rate_data[band];
     iface->basic_rates = radio->basic_rates[band];
     mode = iface->current_mode;
-#endif
+
     wifi_hal_info_print("%s:%d: Interface: %s band: %d mode:%p has %d rates\n", __func__, __LINE__, 
         interface->name, band, mode, mode->num_rates);
 
@@ -1139,7 +1134,7 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         iface->drv_flags |= WPA_DRIVER_FLAGS_PROBE_RESP_OFFLOAD;
     }
 
-    iface->current_mode = NULL;
+    //iface->current_mode = NULL;
     for (int i = 0; i < iface->num_hw_features; i++) {
         struct hostapd_hw_modes *mode = &iface->hw_features[i];
 
