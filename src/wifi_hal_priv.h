@@ -587,6 +587,8 @@ int get_radio_variant_str_from_int(unsigned char variant, char *variant_str);
 int get_rdk_radio_index(unsigned int phy_index);
 int get_interface_name_from_radio_index(uint8_t radio_index, char *interface_name);
 int get_sec_channel_offset(wifi_radio_info_t *radio, int freq);
+int get_bw80_center_freq(wifi_radio_operationParam_t *param, const char *country);
+int get_bw160_center_freq(wifi_radio_operationParam_t *param, const char *country);
 int pick_akm_suite(int sel);
 
 BOOL is_wifi_hal_vap_private(UINT ap_index);

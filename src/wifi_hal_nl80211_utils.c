@@ -1498,6 +1498,56 @@ int get_sec_channel_offset(wifi_radio_info_t *radio, int freq)
     return 0;
 }
 
+int get_bw80_center_freq(wifi_radio_operationParam_t *param, const char *country)
+{
+    int i, freq = 0, num_channels;
+    int *channels;
+    unsigned int center_channels_5g[] = {42, 58, 106, 122, 138, 155};
+    unsigned int center_channels_6g[] = {7, 23, 39, 55, 71, 87, 103, 119, 135, 151, 167, 183, 199, 215};
+
+    if (param->band == WIFI_FREQUENCY_6_BAND) {
+        channels = &center_channels_6g[0];
+        num_channels = ARRAY_SZ(center_channels_6g);
+    } else {
+        channels = &center_channels_5g[0];
+        num_channels = ARRAY_SZ(center_channels_5g);
+    }
+
+    for (i = 0; i < num_channels; i++) {
+        if (param->channel <= (channels[i]+6)) {
+            freq = ieee80211_chan_to_freq(country, param->op_class, channels[i]);
+            break;
+        }
+    }
+
+    return freq;
+}
+
+int get_bw160_center_freq(wifi_radio_operationParam_t *param, const char *country)
+{
+    int i, freq = 0, num_channels;
+    int *channels;
+    int center_channels_5g[] = {50, 114, 163};
+    int center_channels_6g[] = {15, 47, 79, 111, 143, 175, 207};
+
+    if (param->band == WIFI_FREQUENCY_6_BAND) {
+        channels = &center_channels_6g[0];
+        num_channels = ARRAY_SZ(center_channels_6g);
+    } else {
+        channels = &center_channels_5g[0];
+        num_channels = ARRAY_SZ(center_channels_5g);
+    }
+
+    for (i = 0; i < num_channels; i++) {
+        if (param->channel <= (channels[i]+14)) {
+            freq = ieee80211_chan_to_freq(country, param->op_class, channels[i]);
+            break;
+        }
+    }
+
+    return freq;
+}
+
 void wifi_hal_print(wifi_hal_log_level_t level, const char *format, ...)
 {
     char buff[256] = {0};

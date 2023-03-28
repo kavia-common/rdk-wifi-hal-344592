@@ -1013,6 +1013,7 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     struct hostapd_hw_modes *mode;
     struct hostapd_rate_data *rate;
     unsigned int global_op_class;
+    int freq1;
     
     if (interface == NULL) {
         return RETURN_ERR;
@@ -1099,10 +1100,40 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     get_coutry_str_from_code(param->countryCode, country);
 
     iface->freq = ieee80211_chan_to_freq(country, param->op_class, param->channel);
+    freq1 = iface->freq;
+    if ((iface->conf->secondary_channel = get_sec_channel_offset(radio, iface->freq)) == 0) {
+        wifi_hal_info_print("%s:%d: Failed to get sec channel offset for dev:%d\n", __func__, __LINE__, radio->index);
+    }
+
+
+    switch (param->channelWidth) {
+        case WIFI_CHANNELBANDWIDTH_20MHZ:
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_40MHZ:
+            freq1 = iface->freq + iface->conf->secondary_channel*10;
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_80MHZ:
+            freq1 = get_bw80_center_freq(param, country);
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_160MHZ:
+            freq1 = get_bw160_center_freq(param, country);
+            break;
+
+        case WIFI_CHANNELBANDWIDTH_80_80MHZ:
+            break;
+
+        default:
+            break;
+    }
+
+    hostapd_set_oper_centr_freq_seg0_idx(interface->u.ap.hapd.iconf, 36 + (freq1 - 5180) / 5);
 
     global_op_class = (unsigned int) country_to_global_op_class(country, (unsigned char)param->op_class);
-    wifi_hal_info_print("%s:%d:interface name:%s country:%s op class:%d global op class:%d channel:%d frequency:%d\n", __func__, __LINE__, 
-        interface->name, country, param->op_class, global_op_class, param->channel, iface->freq);
+    wifi_hal_info_print("%s:%d:interface name:%s country:%s op class:%d global op class:%d channel:%d frequency:%d center_freq1:%d\n", __func__, __LINE__, 
+        interface->name, country, param->op_class, global_op_class, param->channel, iface->freq, freq1);
     if (interface->u.ap.iface_initialized == false) {
         dl_list_init(&iface->sta_seen);
         interface->u.ap.iface_initialized = true;
@@ -1316,26 +1347,21 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
 
     switch (param->channelWidth) {
     case WIFI_CHANNELBANDWIDTH_20MHZ:
-        iconf->secondary_channel = 0;
         break;
 
     case WIFI_CHANNELBANDWIDTH_40MHZ:
-        iconf->secondary_channel = 1;
         bandwidth = CHANWIDTH_USE_HT;
         break;
 
     case WIFI_CHANNELBANDWIDTH_80MHZ:
-        iconf->secondary_channel = 1;
         bandwidth = CHANWIDTH_80MHZ;
         break;
 
     case WIFI_CHANNELBANDWIDTH_160MHZ:
-        iconf->secondary_channel = 1;
         bandwidth = CHANWIDTH_160MHZ;
         break;
 
     case WIFI_CHANNELBANDWIDTH_80_80MHZ:
-        iconf->secondary_channel = 1;
         bandwidth = CHANWIDTH_80P80MHZ;
         break;
     }
