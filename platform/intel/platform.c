@@ -327,6 +327,39 @@ int platform_get_ssid_default(char *ssid, int vap_index)
     return -1;
 }
 
+int platform_get_channel_bandwidth(wifi_radio_index_t index,  wifi_channelBandwidth_t *channelWidth)
+{
+  char htmode_str1[MAX_UCI_BUF_LEN];
+  wifi_hal_dbg_print("%s:%d: Enter radio index:%d\n", __func__, __LINE__, index);
+  if (uci_converter_alloc_local_uci_context()) {
+      wifi_hal_dbg_print("%s:%d: alloc local context returned err!\n",__func__, __LINE__);
+      return RETURN_ERR;
+  }
+  if(channelWidth == NULL) {
+      wifi_hal_dbg_print("%s:%d: wifi_radio_operationParam_t *operationParam is NULL \n", __func__, __LINE__);
+      return RETURN_ERR;
+  }
+  wifi_hal_dbg_print("%s:%d: Entering uci****************:\n", __func__, __LINE__);
+  uci_converter_get_str_ext(TYPE_RADIO, index, "htmode", htmode_str1, sizeof(htmode_str1));
+  wifi_hal_dbg_print("%s:%d: Enter radio index:%d htmode_value=%s\n", __func__, __LINE__, index,htmode_str1);
+  if (!strncmp(htmode_str1, "HT20", MAX_UCI_BUF_LEN) || !strncmp(htmode_str1, "VHT20", MAX_UCI_BUF_LEN))
+      *channelWidth = WIFI_CHANNELBANDWIDTH_20MHZ;
+  else if (!strncmp(htmode_str1, "HT40+", MAX_UCI_BUF_LEN) || !strncmp(htmode_str1, "HT40-", MAX_UCI_BUF_LEN) || !strncmp(htmode_str1, "VHT40+", MAX_UCI_BUF_LEN) ||
+      !strncmp(htmode_str1, "VHT40-", MAX_UCI_BUF_LEN) || !strncmp(htmode_str1, "VHT40", MAX_UCI_BUF_LEN))
+      *channelWidth = WIFI_CHANNELBANDWIDTH_40MHZ;
+  else if (!strncmp(htmode_str1, "VHT80", MAX_UCI_BUF_LEN))
+      *channelWidth = WIFI_CHANNELBANDWIDTH_80MHZ;
+  else if (!strncmp(htmode_str1, "VHT160", MAX_UCI_BUF_LEN))
+      *channelWidth = WIFI_CHANNELBANDWIDTH_160MHZ;
+  else {
+      wifi_hal_dbg_print("%s:%d: htmode_str1 error value:%s \n", __func__, __LINE__,htmode_str1);
+      return RETURN_ERR;
+  }
+  wifi_hal_dbg_print("%s:%d: %u *****successful***********\n", __func__, __LINE__,*channelWidth);
+  uci_converter_free_local_uci_context();
+  return 0;
+}
+
 int platform_get_country_code_default(char *code)
 {
     if (code == NULL)

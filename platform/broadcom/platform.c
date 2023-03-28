@@ -882,3 +882,8 @@ int platform_sync_done(void* priv)
     return 0;
 }
 
+int platform_get_channel_bandwidth(wifi_radio_index_t index,  wifi_channelBandwidth_t *channelWidth)
+{
+    return 0;
+}
+
