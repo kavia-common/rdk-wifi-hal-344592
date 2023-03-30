@@ -461,6 +461,7 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
     }
 
     wifi_radio_operationParam_t *radio_param;
+    wifi_radio_operationParam_t tmp_radio_param;
     radio_param = &radio->oper_param;
 
     switch (bw) {
@@ -493,16 +494,26 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
                             ifidx, interface->vap_info.vap_name, interface->vap_info.radio_index, channel, freq, bw,
                             cf1, cf2, ch_type, wifi_chan_event_type, event_type);
     }
-    if ((op_class = get_op_class_from_radio_params(radio_param)) == -1) {
+
+    memcpy(&tmp_radio_param,radio_param,sizeof(wifi_radio_operationParam_t));
+    if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED)
+    {
+        tmp_radio_param.channelWidth = l_channel_width;
+        tmp_radio_param.channel = channel;
+    }
+
+    if ((op_class = get_op_class_from_radio_params(&tmp_radio_param)) == -1) {
         wifi_hal_error_print("%s:%d: could not find op_class for radio index:%d\n", __func__, __LINE__, interface->vap_info.radio_index);
         return;
     }
- 
-    if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED) 
+
+    if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED)
     {
         radio_param->channelWidth = l_channel_width;
         radio_param->channel = channel;
         radio_param->op_class = op_class;
+        *p_prev_channel = channel;
+        *p_prev_channelWidth = l_channel_width;
     }
 
     if ((callbacks != NULL) && (callbacks->channel_change_event_callback)) {
@@ -512,12 +523,6 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
         radio_channel_param.channelWidth = l_channel_width;
         radio_channel_param.op_class = op_class;
         callbacks->channel_change_event_callback(radio_channel_param);
-    }
-
-    if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED)
-    {
-        *p_prev_channel = channel;
-        *p_prev_channelWidth = l_channel_width;
     }
 
 }
