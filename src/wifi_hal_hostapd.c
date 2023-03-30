@@ -1871,11 +1871,12 @@ void update_eapol_sm_params(wifi_interface_info_t *interface)
     wifi_vap_info_t *vap;
     wifi_vap_security_t *sec;
 
-    ctx = &interface->u.sta.wpa_eapol_ctx;
     vap = &interface->vap_info;
     sec = &vap->u.sta_info.security;
 
     if (interface->u.sta.wpa_sm->eapol == NULL) {
+        ctx = os_zalloc(sizeof(struct eapol_ctx));
+
         ctx->ctx = interface;
         ctx->msg_ctx = interface;
 	ctx->eapol_send_ctx = interface;

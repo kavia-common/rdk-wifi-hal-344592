@@ -255,7 +255,6 @@ typedef struct {
 
     // supplicant specific data
     struct wpa_sm     *wpa_sm;
-    struct eapol_ctx  wpa_eapol_ctx;
     struct eap_peer_config wpa_eapol_config;
     struct eap_method_type wpa_eapol_method;
     unsigned char   assoc_req[512];

@@ -368,6 +368,9 @@ static void nl80211_disconnect_event(wifi_interface_info_t *interface, struct nl
     }
 
     if (interface->u.sta.wpa_sm != NULL) {
+        eapol_sm_deinit(interface->u.sta.wpa_sm->eapol);
+        interface->u.sta.wpa_sm->eapol = NULL;
+
         wpa_sm_deinit(interface->u.sta.wpa_sm);
         interface->u.sta.wpa_sm = NULL;
     }
