@@ -1271,10 +1271,6 @@ int get_security_mode_str_from_int(wifi_security_modes_t security_mode, char *se
 int get_security_encryption_mode_str_from_int(wifi_encryption_method_t encryption_mode, char *encryption_mode_str)
 {
     switch (encryption_mode) {
-    case wifi_encryption_none:
-        strcpy(encryption_mode_str, "none");
-        break;
-
     case wifi_encryption_tkip:
         strcpy(encryption_mode_str, "tkip");
         break;

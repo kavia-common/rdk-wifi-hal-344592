@@ -5161,49 +5161,48 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
         wifi_hal_dbg_print("update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
             key_mgmt);
     } else {
-        if (security->encr == wifi_encryption_aes) {
-            wpa_conf.wpa_group = WPA_CIPHER_CCMP;
-            wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
-        } else if (security->encr == wifi_encryption_tkip) {
-            wpa_conf.wpa_group = WPA_CIPHER_TKIP;
-            wpa_conf.rsn_pairwise = WPA_CIPHER_TKIP;
-        } else if (security->encr == wifi_encryption_aes_tkip) {
-            wpa_conf.wpa_group = WPA_CIPHER_TKIP;
-            wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
-        } else if (security->encr == wifi_encryption_none) {
+        if (security->mode == wifi_security_mode_none) {
+            wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_NONE;
             wpa_conf.wpa_group = WPA_CIPHER_NONE;
             wpa_conf.rsn_pairwise = WPA_CIPHER_NONE;
         } else {
-            wifi_hal_info_print("%s:%d:Invalid encryption mode:%d in wifi_hal_connect\n", __func__, __LINE__, security->encr);
-        }
+            if (security->encr == wifi_encryption_aes) {
+                wpa_conf.wpa_group = WPA_CIPHER_CCMP;
+                wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
+            } else if (security->encr == wifi_encryption_tkip) {
+                wpa_conf.wpa_group = WPA_CIPHER_TKIP;
+                wpa_conf.rsn_pairwise = WPA_CIPHER_TKIP;
+            } else if (security->encr == wifi_encryption_aes_tkip) {
+                wpa_conf.wpa_group = WPA_CIPHER_TKIP;
+                wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
+            } else {
+                wifi_hal_info_print("%s:%d:Invalid encryption mode:%d in wifi_hal_connect\n", __func__, __LINE__, security->encr);
+            }
 
-        switch (security->mode) {
-            case wifi_security_mode_none:
-                wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_NONE;
-                break;
+            switch (security->mode) {
+                case wifi_security_mode_wpa_personal:
+                case wifi_security_mode_wpa2_personal:
+                case wifi_security_mode_wpa_wpa2_personal:
+                    wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_PSK;
+                    break;
 
-            case wifi_security_mode_wpa_personal:
-            case wifi_security_mode_wpa2_personal:
-            case wifi_security_mode_wpa_wpa2_personal:
-                wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_PSK;
-                break;
-
-            case wifi_security_mode_wpa_enterprise:
-            case wifi_security_mode_wpa2_enterprise:
-            case wifi_security_mode_wpa_wpa2_enterprise:
-                wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_IEEE8021X;
-                break;
-            case wifi_security_mode_wpa3_personal:
-            case wifi_security_mode_wpa3_enterprise:
-                wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_SAE;
-                break;
-            case wifi_security_mode_wpa3_transition:
-                wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
-                break;
-            default:
-                 wifi_hal_info_print("%s:%d:Invalid security mode: %d in wifi_hal_connect\r\n", __func__, __LINE__, security->mode);
-                wpa_conf.wpa_key_mgmt = -1;
-                break;
+                case wifi_security_mode_wpa_enterprise:
+                case wifi_security_mode_wpa2_enterprise:
+                case wifi_security_mode_wpa_wpa2_enterprise:
+                    wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_IEEE8021X;
+                    break;
+                case wifi_security_mode_wpa3_personal:
+                case wifi_security_mode_wpa3_enterprise:
+                    wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_SAE;
+                    break;
+                case wifi_security_mode_wpa3_transition:
+                    wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
+                    break;
+                default:
+                    wifi_hal_info_print("%s:%d:Invalid security mode: %d in wifi_hal_connect\r\n", __func__, __LINE__, security->mode);
+                    wpa_conf.wpa_key_mgmt = -1;
+                    break;
+            }
         }
     }
 

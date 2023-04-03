@@ -511,29 +511,29 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             break;
     }
 
-    switch (sec->encr) {
-    case wifi_encryption_none:
+    if (sec->mode == wifi_security_mode_none) {
         conf->wpa_pairwise = wpa_parse_cipher("NONE");
-        break;
+    } else {
+        switch (sec->encr) {
+        case wifi_encryption_tkip:
+            conf->wpa_pairwise = wpa_parse_cipher("TKIP");
+            break;
 
-    case wifi_encryption_tkip:
-        conf->wpa_pairwise = wpa_parse_cipher("TKIP");
-        break;
+        case wifi_encryption_aes:
+            conf->wpa_pairwise = wpa_parse_cipher("CCMP");
+            break;
 
-    case wifi_encryption_aes:
-        conf->wpa_pairwise = wpa_parse_cipher("CCMP");
-        break;
+        case wifi_encryption_aes_tkip:
+            conf->wpa_pairwise = wpa_parse_cipher("TKIP CCMP");
+            break;
 
-    case wifi_encryption_aes_tkip:
-        conf->wpa_pairwise = wpa_parse_cipher("TKIP CCMP");
-        break;
-
-    default:
-        wifi_hal_info_print("%s:%d:Invalid encryption mode in VAP setting\n", 
-                           __func__, __LINE__);
-        break;
+        default:
+            wifi_hal_info_print("%s:%d:Invalid encryption mode in VAP setting\n",
+                            __func__, __LINE__);
+            break;
+        }
     }
-    
+
     conf->wpa_group_rekey = sec->rekey_interval;
     conf->wpa_group_rekey_set = 1;
 
@@ -1845,40 +1845,34 @@ void update_wpa_sm_params(wifi_interface_info_t *interface)
         wifi_hal_dbg_print("update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
             key_mgmt);
     } else {
-        if (sec->encr == wifi_encryption_aes) {
-            wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_CCMP);
-            wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_CCMP);
-        } else if (sec->encr == wifi_encryption_tkip) {
-            wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_TKIP);
-            wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_TKIP);
-        } else if (sec->encr == wifi_encryption_none) {
+        if (sec->mode == wifi_security_mode_none) {
+            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_NONE);
             wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_NONE);
             wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_NONE);
-        } else { /* TKIP_AES */
-            wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_CCMP);
-    	    wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_TKIP);
-        }
-    
-        if (sec->mode == wifi_security_mode_wpa2_personal)
-            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_PSK);
-        else if (sec->mode == wifi_security_mode_wpa2_enterprise)
-            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_IEEE8021X);
-        else if (sec->mode == wifi_security_mode_none)
-            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_NONE);
+        } else {
+            if (sec->encr == wifi_encryption_aes) {
+                wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_CCMP);
+                wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_CCMP);
+            } else if (sec->encr == wifi_encryption_tkip) {
+                wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_TKIP);
+                wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_TKIP);
+            } else { /* TKIP_AES */
+                wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_CCMP);
+                wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_TKIP);
+            }
 
-        else if (sec->mode == wifi_security_mode_wpa3_enterprise ){
-            wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_GCMP_256);
-            wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_GCMP_256);
-            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT,WPA_KEY_MGMT_IEEE8021X_SHA256);
-        } else if (sec->mode == wifi_security_mode_enhanced_open )
-            wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_OWE);
-        else {
-            wifi_hal_error_print("Unsupported security mode : 0x%x\n", sec->mode);
-            return;
+            if (sec->mode == wifi_security_mode_wpa2_personal)
+                wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_PSK);
+            else if (sec->mode == wifi_security_mode_wpa2_enterprise)
+                wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_IEEE8021X);
+            else {
+                wifi_hal_error_print("Unsupported security mode : 0x%x\n", sec->mode);
+                return;
+            }
         }
     }
 
-    if (get_ie_by_eid(WLAN_EID_RSN, assoc_req, interface->u.sta.assoc_req_len, &ie, &ie_len) 
+    if (get_ie_by_eid(WLAN_EID_RSN, assoc_req, interface->u.sta.assoc_req_len, &ie, &ie_len)
                 == true) {
         wpa_sm_set_assoc_wpa_ie(sm, ie, ie_len);
     }
