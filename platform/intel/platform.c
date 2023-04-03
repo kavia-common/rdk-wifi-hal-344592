@@ -320,10 +320,6 @@ int platform_get_ssid_default(char *ssid, int vap_index)
             return -1;
         }
     }
-    else{
-         wifi_hal_dbg_print("platform_get_ssid_default  vap: %d,succcess\n",vap_index);
-         return nvram_get_current_ssid(ssid, vap_index); 
-    }
     else if (is_wifi_hal_vap_xhs(vap_index)){
         /* Return default SSID of XHS vap */
         ret = ARM_RPC(ssid,MAX_SSID_LEN,"default_xhs_ssid");
