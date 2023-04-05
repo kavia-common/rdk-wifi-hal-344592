@@ -613,14 +613,20 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
         {
           if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "auth_server", map->vap_array[index].u.bss_info.security.u.radius.ip))
             wifi_hal_dbg_print("%s:%d:  Failed to set the auth server:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.ip,map->vap_array[index].vap_index);
-          if(uci_converter_set_uint(TYPE_VAP, map->vap_array[index].vap_index, "auth_port", map->vap_array[index].u.bss_info.security.u.radius.port))
-            wifi_hal_dbg_print("%s:%d: Failed to set the auth port:%d for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.port,map->vap_array[index].vap_index);
+          if(map->vap_array[index].u.bss_info.security.u.radius.port != 0 )
+          {
+            if(uci_converter_set_uint(TYPE_VAP, map->vap_array[index].vap_index, "auth_port", map->vap_array[index].u.bss_info.security.u.radius.port))
+              wifi_hal_dbg_print("%s:%d: Failed to set the auth port:%d for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.port,map->vap_array[index].vap_index);
+          }
           if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "auth_secret", map->vap_array[index].u.bss_info.security.u.radius.key))
             wifi_hal_dbg_print("%s:%d: Failed to set the auth secret:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.key,map->vap_array[index].vap_index);
           if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "sec_auth_server", map->vap_array[index].u.bss_info.security.u.radius.ip))
             wifi_hal_dbg_print("%s:%d: Failed to set the auth server:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.ip,map->vap_array[index].vap_index);
-          if(uci_converter_set_uint(TYPE_VAP, map->vap_array[index].vap_index, "sec_auth_port", map->vap_array[index].u.bss_info.security.u.radius.port))
-            wifi_hal_dbg_print("%s:%d: Failed to set the auth port:%d for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.port,map->vap_array[index].vap_index);
+          if(map->vap_array[index].u.bss_info.security.u.radius.port != 0 )
+          {
+            if(uci_converter_set_uint(TYPE_VAP, map->vap_array[index].vap_index, "sec_auth_port", map->vap_array[index].u.bss_info.security.u.radius.port))
+             wifi_hal_dbg_print("%s:%d: Failed to set the auth port:%d for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.port,map->vap_array[index].vap_index);
+          }
           if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "sec_auth_secret", map->vap_array[index].u.bss_info.security.u.radius.key))
             wifi_hal_dbg_print("%s:%d: Failed to set the auth secret:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.radius.key,map->vap_array[index].vap_index);
         }
