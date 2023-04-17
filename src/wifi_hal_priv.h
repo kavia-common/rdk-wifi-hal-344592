@@ -285,8 +285,8 @@ typedef struct {
     bool    iface_initialized;
     bool    conf_initialized;
     struct hostapd_radius_servers radius;
-    struct hostapd_radius_server    auth_serv, acct_serv;
-    char   auth_shared_secret[64], acct_shared_secret[64];;
+    struct hostapd_radius_server    auth_serv;
+    char   auth_shared_secret[64];
     char   nas_identifier[64];
     // array elements reference
     struct hostapd_data     *hapds[1];

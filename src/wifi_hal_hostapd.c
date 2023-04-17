@@ -129,15 +129,9 @@ void init_radius_config(wifi_interface_info_t *interface)
         radius->num_auth_servers = 2;
         radius->auth_servers = servers;
         radius->auth_server = &servers[0];
-
-        radius->num_acct_servers = 2;
-        radius->acct_servers = servers;
-        radius->acct_server = &servers[0];
+        radius->num_acct_servers = 0;
         radius->auth_servers[0].shared_secret = shared_secret_1;
         radius->auth_servers[1].shared_secret = shared_secret_2;
-        radius->acct_servers[0].shared_secret = shared_secret_1;
-        radius->acct_servers[1].shared_secret = shared_secret_2;
-
 
         conf->nas_identifier = interface->u.ap.nas_identifier;
         char *wpa_passphrase = (char *)malloc(256);
@@ -585,87 +579,64 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
         wifi_hal_dbg_print("%s:%d, Updating NAS identifier %s\n", __func__, __LINE__, output);
         memset(output, '\0', sizeof(output));
         snprintf(output, sizeof(output), "30:s:%s:%s", conf->nas_identifier, conf->ssid.ssid);
-        conf->radius_acct_req_attr = hostapd_parse_radius_attr(output);
         conf->radius_auth_req_attr = hostapd_parse_radius_attr(output);
 
 #ifdef WIFI_HAL_VERSION_3_PHASE2
         if (inet_ntop(AF_INET, &sec->u.radius.ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[0].addr.af = AF_INET;
             conf->radius->auth_servers[0].addr.u.v4 = sec->u.radius.ip;
-            conf->radius->acct_servers[0].addr.af = AF_INET;
-            conf->radius->acct_servers[0].addr.u.v4 = sec->u.radius.ip;
         }
 #ifdef CONFIG_IPV6
         else (inet_ntop(AF_INET6, &sec->u.radius.ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[0].addr.af = AF_INET6;
             conf->radius->auth_servers[0].addr.u.v6 = sec->u.radius.ip;
-            conf->radius->acct_servers[0].addr.af = AF_INET6;
-            conf->radius->acct_servers[0].addr.u.v6 = sec->u.radius.ip;
         }
 #endif //CONFIG_IPV6
 #else  //WIFI_HAL_VERSION_3_PHASE2
         if (inet_pton(AF_INET, (const char *)sec->u.radius.ip, &ipaddr)) {
             conf->radius->auth_servers[0].addr.af = AF_INET;
             conf->radius->auth_servers[0].addr.u.v4 = ipaddr;
-            conf->radius->acct_servers[0].addr.af = AF_INET;
-            conf->radius->acct_servers[0].addr.u.v4 = ipaddr;
         }
 #ifdef CONFIG_IPV6
         else (inet_pton(AF_INET6, (const char *)sec->u.radius.ip, &ipaddr)) {
             conf->radius->auth_servers[0].addr.af = AF_INET6;
             conf->radius->auth_servers[0].addr.u.v6 = ipaddr;
-            conf->radius->acct_servers[0].addr.af = AF_INET6;
-            conf->radius->acct_servers[0].addr.u.v6 = ipaddr;
         }
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
         strcpy(conf->radius->auth_servers[0].shared_secret, sec->u.radius.key);
-        strcpy(conf->radius->acct_servers[0].shared_secret, sec->u.radius.key);
         conf->radius->auth_servers[0].shared_secret_len = strlen(conf->radius->auth_servers[0].shared_secret);
-        conf->radius->acct_servers[0].shared_secret_len = strlen(conf->radius->acct_servers[0].shared_secret);
         conf->radius->auth_servers[0].port = sec->u.radius.port;
-        conf->radius->acct_servers[0].port = sec->u.radius.port;
 
 
 #ifdef WIFI_HAL_VERSION_3_PHASE2
         if (inet_ntop(AF_INET, &sec->u.radius.s_ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[1].addr.af = AF_INET;
             conf->radius->auth_servers[1].addr.u.v4 = sec->u.radius.s_ip;
-            conf->radius->acct_servers[1].addr.af = AF_INET;
-            conf->radius->acct_servers[1].addr.u.v4 = sec->u.radius.s_ip;
         }
 #ifdef CONFIG_IPV6
         else (inet_ntop(AF_INET6, &sec->u.radius.s_ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[1].addr.af = AF_INET6;
             conf->radius->auth_servers[1].addr.u.v6 = sec->u.radius.s_ip;
-            conf->radius->acct_servers[1].addr.af = AF_INET6;
-            conf->radius->acct_servers[1].addr.u.v6 = sec->u.radius.s_ip;
         }
 #endif //CONFIG_IPV6
 #else  //WIFI_HAL_VERSION_3_PHASE2
         if (inet_pton(AF_INET, (const char *)&sec->u.radius.s_ip, &ipaddr)) {
             conf->radius->auth_servers[1].addr.af = AF_INET;
             conf->radius->auth_servers[1].addr.u.v4 = ipaddr;
-            conf->radius->acct_servers[1].addr.af = AF_INET;
-            conf->radius->acct_servers[1].addr.u.v4 = ipaddr;
         }
 #ifdef CONFIG_IPV6
         else (inet_pton(AF_INET6, (const char *)&sec->u.radius.s_ip, &ipaddr)) {
             conf->radius->auth_servers[1].addr.af = AF_INET6;
             conf->radius->auth_servers[1].addr.u.v6 = ipaddr;
-            conf->radius->acct_servers[1].addr.af = AF_INET6;
-            conf->radius->acct_servers[1].addr.u.v6 = ipaddr;
         }
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
         strcpy(conf->radius->auth_servers[1].shared_secret, sec->u.radius.s_key);
-        strcpy(conf->radius->acct_servers[1].shared_secret, sec->u.radius.s_key);
         conf->radius->auth_servers[1].shared_secret_len = strlen(conf->radius->auth_servers[1].shared_secret);
-        conf->radius->acct_servers[1].shared_secret_len = strlen(conf->radius->acct_servers[1].shared_secret);
         conf->radius->auth_servers[1].port = sec->u.radius.s_port;
-        conf->radius->acct_servers[1].port = sec->u.radius.s_port;
 
         if (is_wifi_hal_vap_hotspot_from_interfacename(conf->iface)) {
             conf->radius_das_port = sec->u.radius.dasport;
