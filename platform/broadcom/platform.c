@@ -477,6 +477,9 @@ int platform_get_ssid_default(char *ssid, int vap_index){
             return 0;
         }
     }else if(is_wifi_hal_vap_xhs(vap_index)) {
+#if defined(SKYSR300_PORT) || defined(SKYSR213_PORT)
+        return nvram_get_current_ssid(ssid, vap_index);
+#else
         /* XB7 string is 'Default XHS SSID for 2.4GHZ and 5.0GHZ:' */
         /* XB8 string is 'Default XHS SSID for 2.4GHZ, 5.0GHZ and 6.0GHZ:' */
         fp = popen("grep \"Default XHS SSID\" /tmp/factory_nvram.data | cut -d ':' -f2 | cut -d ' ' -f2","r");
@@ -488,6 +491,7 @@ int platform_get_ssid_default(char *ssid, int vap_index){
             pclose(fp);
             return 0;
         }
+#endif
     }
     else {
         return nvram_get_current_ssid(ssid, vap_index);
