@@ -234,7 +234,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     mac_addr_str_t  sta_mac_str, interface_mac_str, frame_da_str;
     wifi_vap_info_t *vap;
     bool drop = false;
-    int reason = 0;
+    u16 reason = 0;
     wifi_device_callbacks_t *callbacks;
     struct sta_info *station = NULL;
     wifi_frame_t mgmt_frame;
@@ -347,29 +347,31 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         wifi_hal_dbg_print("%s:%d: Received disassoc frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
 
+        if ((attr = tb[NL80211_ATTR_REASON_CODE]) != NULL) {
+            reason = nla_get_u16(attr);
+        }
 
         station = ap_get_sta(&interface->u.ap.hapd, sta);
         if (station) {
-            wifi_hal_dbg_print("station disassocreason in disassoc frame is %d\n",station->disconnect_reason_code);
+            wifi_hal_dbg_print("station disassocreason in disassoc frame is %d\n", station->disconnect_reason_code);
             if (station->disconnect_reason_code == WLAN_RADIUS_GREYLIST_REJECT) {
                 reason = station->disconnect_reason_code;
             }
             ap_free_sta(&interface->u.ap.hapd, station);
-        }
 
-        for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
-            if (callbacks->disassoc_cb[i] != NULL) {
-                callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
+            for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
+                if (callbacks->disassoc_cb[i] != NULL) {
+                    callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
+                }
             }
         }
+
         break;
 
     case WLAN_FC_STYPE_DEAUTH:
         mgmt_type = WIFI_MGMT_FRAME_TYPE_DEAUTH;
         wifi_hal_dbg_print("%s:%d: Received deauth frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
-
-        u16 reason = 0;
 
         if (callbacks->num_apDeAuthEvent_cbs == 0) {
             break;
@@ -384,6 +386,22 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
                 callbacks->apDeAuthEvent_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
             }
         }
+
+        station = ap_get_sta(&interface->u.ap.hapd, sta);
+        if (station) {
+            wifi_hal_dbg_print("station deauthreason in deauth frame is %d\n", station->disconnect_reason_code);
+            if (station->disconnect_reason_code == WLAN_RADIUS_GREYLIST_REJECT) {
+                reason = station->disconnect_reason_code;
+            }
+            ap_free_sta(&interface->u.ap.hapd, station);
+
+            for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
+                if (callbacks->disassoc_cb[i] != NULL) {
+                    callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
+                }
+            }
+        }
+
         break;    
 
     default:
