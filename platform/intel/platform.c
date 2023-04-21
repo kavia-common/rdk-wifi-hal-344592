@@ -14,6 +14,15 @@
 #define MAX_KEYPASSPHRASE_LEN 128
 #define MAX_SSID_LEN 33
 
+#define WIFI5_2G "g,n"
+#define WIFI6_2G "g,n,ax"
+#define WIFI5_5G "a,n,ac"
+#define WIFI6_5G "a,n,ac,ax"
+#define WIFI5_2G_UCI "11bgn"
+#define WIFI6_2G_UCI "11bgnax"
+#define WIFI5_5G_UCI "11anac"
+#define WIFI6_5G_UCI "11anacax"
+
 int platform_pre_init()
 {
 
@@ -58,6 +67,29 @@ int nvram_get_current_ssid(char *l_ssid, int vap_index)
     }
     wifi_hal_dbg_print("nvram_get_current_password vap_index:%d \n",vap_index);
     return uci_converter_get_str_ext(TYPE_VAP, vap_index, "ssid", l_ssid, MAX_SSID_LEN - 1);
+}
+
+void hwmode_format_uci(char *output_str, const char *input_str)
+{
+    if(output_str == NULL) {
+        wifi_hal_error_print("%s: output_str is NULL", __func__);
+        return;
+    }
+
+    memset(output_str, 0, MAX_UCI_BUF_LEN);
+
+    if (!strncmp(WIFI5_2G, input_str, sizeof(WIFI5_2G)))
+        strncpy(output_str, WIFI5_2G_UCI, strlen(WIFI5_2G_UCI) + 1);
+    else if (!strncmp(WIFI6_2G, input_str, sizeof(WIFI6_2G)))
+        strncpy(output_str, WIFI6_2G_UCI, strlen(WIFI6_2G_UCI) + 1);
+    else if (!strncmp(WIFI5_5G, input_str, sizeof(WIFI5_5G)))
+        strncpy(output_str, WIFI5_5G_UCI, strlen(WIFI5_5G_UCI) + 1);
+    else if (!strncmp(WIFI6_5G, input_str, sizeof(WIFI6_5G)))
+        strncpy(output_str, WIFI6_5G_UCI, strlen(WIFI6_5G_UCI) + 1);
+    else {
+        wifi_hal_error_print("%s: incorrect input_str=%s", __func__, input_str);
+    }
+    wifi_hal_dbg_print("%s: output_str=%s\n", __func__, output_str);
 }
 
 /* Stub for wave_api function, should be removed after implementation*/
@@ -472,6 +504,8 @@ int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *op
 {
     char temp_buff[MAX_UCI_BUF_LEN];
     memset(temp_buff, 0 ,sizeof(temp_buff));
+    char temp_buff1[MAX_UCI_BUF_LEN];
+    memset(temp_buff1, 0 ,sizeof(temp_buff1));
     wifi_hal_dbg_print("%s:%d: Enter radio index:%d\n", __func__, __LINE__, index);
 
     if (uci_converter_alloc_local_uci_context()) {
@@ -523,7 +557,8 @@ int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *op
         operationParam->beaconInterval);
     memset(temp_buff, 0 ,sizeof(temp_buff));
     get_radio_variant_str_from_int(operationParam->variant, temp_buff);
-    uci_converter_set_str(TYPE_RADIO, index, "hwmode", temp_buff);
+    hwmode_format_uci(temp_buff1, temp_buff);
+    uci_converter_set_str(TYPE_RADIO, index, "hwmode", temp_buff1);
 
     if (operationParam->autoChannelEnabled) {
         uci_converter_set_str(TYPE_RADIO, index, "channel", "auto");
