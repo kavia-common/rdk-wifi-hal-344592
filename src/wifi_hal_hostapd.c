@@ -111,7 +111,6 @@ void init_radius_config(wifi_interface_info_t *interface)
         memset(config_methods, '\0', WPS_METHODS_SIZE);
         char *shared_secret_1 = NULL;
         char *shared_secret_2 = NULL;
-        char *wps_pin = (char *)malloc(9);
 
         //wifi_vap_info_t *vap;
         //int ap_index;
@@ -138,7 +137,7 @@ void init_radius_config(wifi_interface_info_t *interface)
         conf->ssid.wpa_passphrase = wpa_passphrase;
 #ifdef CONFIG_WPS
         conf->config_methods = config_methods;
-        conf->ap_pin = wps_pin;
+        conf->ap_pin = calloc(1, WPS_PIN_SIZE);
 #endif
     }
 }
@@ -879,7 +878,7 @@ int update_hostap_bss(wifi_interface_info_t *interface)
         }
 
         if (strlen(vap->u.bss_info.wps.pin) != 0) {
-            strcpy(conf->ap_pin, vap->u.bss_info.wps.pin);
+            strncpy(conf->ap_pin, vap->u.bss_info.wps.pin, WPS_PIN_SIZE - 1);
         }
         conf->wps_cred_processing = 1;
         conf->pbc_in_m1 = 1;

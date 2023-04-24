@@ -133,6 +133,7 @@ extern "C" {
 #define BUF_SIZE         32
 #define NVRAM_NAME_SIZE  32
 #define WPS_METHODS_SIZE 512
+#define WPS_PIN_SIZE     9
 
 /* 2GHz radio */
 #define MIN_FREQ_MHZ_2G             2412
