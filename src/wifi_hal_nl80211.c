@@ -5601,13 +5601,13 @@ int wifi_drv_read_sta_data(void *priv,
 }
 
 #if HOSTAPD_VERSION >= 210 //2.10
-static int wifi_drv_send_mlme(void *priv, const u8 *data,
+ int wifi_drv_send_mlme(void *priv, const u8 *data,
                                           size_t data_len,int noack,
                       unsigned int freq, const u16 *csa_offs,
                       size_t csa_offs_len, int no_encrypt,
                       unsigned int wait)
 #else
-static int wifi_drv_send_mlme(void *priv, const u8 *data,
+ int wifi_drv_send_mlme(void *priv, const u8 *data,
                                           size_t data_len, int noack,
                                           unsigned int freq,
                                           const u16 *csa_offs,

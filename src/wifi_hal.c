@@ -1543,4 +1543,37 @@ wifi_device_callbacks_t *get_hal_device_callbacks()
 {
     return &g_wifi_hal.device_callbacks;
 }
+void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const unsigned char *data,size_t data_len,unsigned int freq)
+{
 
+    wifi_hal_dbg_print("%s:%d:Enter interface for ap index:%d\n", __func__, __LINE__, apIndex);
+    wifi_interface_info_t *interface;
+    u8 *buf;
+    struct ieee80211_hdr *hdr;
+
+    buf = os_zalloc(24 + data_len);
+    if (buf == NULL)
+        return ;
+    os_memcpy(buf + 24, data, data_len);
+    hdr = (struct ieee80211_hdr *) buf;
+    hdr->frame_control =
+        IEEE80211_FC(WLAN_FC_TYPE_MGMT, WLAN_FC_STYPE_ACTION);
+
+    if ((interface = get_interface_by_vap_index(apIndex)) == NULL) {
+        wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+        os_free(buf);
+        return ;
+    }
+    os_memcpy(hdr->addr1, sta, ETH_ALEN);
+    os_memcpy(hdr->addr2, interface->mac, ETH_ALEN);
+    os_memcpy(hdr->addr3, interface->mac, ETH_ALEN);
+
+#if HOSTAPD_VERSION >= 210 //2.10
+    wifi_drv_send_mlme(interface,buf, 24+data_len, 0, 0, NULL, 0,0,0);
+#else
+    wifi_drv_send_mlme(interface,buf,24+data_len, 0, 0, NULL, 0);
+#endif
+
+    os_free(buf);
+    wifi_hal_dbg_print("%s:%d:Exit for mgmt fame on %d\n", __func__, __LINE__, apIndex);
+}

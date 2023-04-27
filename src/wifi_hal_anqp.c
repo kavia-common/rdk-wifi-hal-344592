@@ -41,7 +41,9 @@
 #include <wifi_hal_rdk_framework.h>
 #include <collection.h>
 #include <cJSON.h>
-
+#if defined (RDK_ONEWIFI)
+#include "wifi_hal_priv.h"
+#endif
 extern unsigned char wifi_common_hal_test_signature[8];
 
 extern char* get_formatted_time(char *);
@@ -69,14 +71,12 @@ void wifi_anqp_dbg_print(int level, char *format, ...)
     {
         return;
     }
-
     get_formatted_time(buff);
     strcat(buff, " ");
 
     va_start(list, format);
     vsprintf(&buff[strlen(buff)], format, list);
     va_end(list);
-
     if (fpg == NULL)
     {
         fpg = fopen("/tmp/wifiAnqp", "a+");
@@ -182,13 +182,13 @@ void callback_anqp_gas_init_frame_received(int ap_index, mac_address_t sta, unsi
     if(sta){
         snprintf(macStr, MAC_STR_LEN, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
              sta[0], sta[1], sta[2], sta[3], sta[4], sta[5]);
-        wifi_anqp_dbg_print(1, "%s:%d: converted mac: %s\n", __func__, __LINE__,macStr);
+        wifi_anqp_dbg_print(1, "%s:%d: converted mac: %s ap_index=%d\n", __func__, __LINE__,macStr,ap_index);
     }
     else{
         wifi_anqp_dbg_print(1, "%s:%d: Invalid mac. Return\n", __func__, __LINE__);
     }  
 
-    if((ap_index < 0) || (ap_index > MAX_AP_INDEX)){
+    if((ap_index < 0)){
         wifi_anqp_dbg_print(1, "%s:%d: Invalid AP Index: %d \n", __func__,__LINE__,ap_index);
         return;
     }
@@ -199,6 +199,7 @@ void callback_anqp_gas_init_frame_received(int ap_index, mac_address_t sta, unsi
     }
 
 #if defined (FEATURE_SUPPORT_PASSPOINT)
+#if !defined (RDK_ONEWIFI)
     BOOL enabled;
     INT rc;
     rc = wifi_getApInterworkingServiceEnable(ap_index, &enabled);
@@ -216,6 +217,21 @@ void callback_anqp_gas_init_frame_received(int ap_index, mac_address_t sta, unsi
         wifi_anqp_dbg_print(1, "%s:%d: Error: Interworking enabled flag could not be retreived for AP: %d. Not processing any gas queries \n", __func__, __LINE__,ap_index+1);
         return;
     }
+#else
+    wifi_interface_info_t *interface = NULL;
+    wifi_vap_info_t vap;
+    interface = get_interface_by_vap_index(ap_index);
+    vap = (interface->vap_info);
+    wifi_anqp_dbg_print(1,"Interworking enabled=%d and passpoint enabled =%d vap name=%s\n",vap.u.bss_info.interworking.interworking.interworkingEnabled,vap.u.bss_info.interworking.passpoint.enable,vap.vap_name);
+
+    if ( !(vap.u.bss_info.interworking.interworking.interworkingEnabled) || !(vap.u.bss_info.interworking.passpoint.enable)) {
+        wifi_anqp_dbg_print(1, "%s:%d: ONEWIFI passpoint is disabled  for ap_index=%d\n", __func__, __LINE__,ap_index);
+        return;
+    }
+    else {
+        wifi_anqp_dbg_print(1, "%s:%d: ONEWIFI passpoint is enabled for ap_index=%d\n", __func__, __LINE__,ap_index);
+    }
+#endif
 #else
     wifi_anqp_dbg_print(1, "%s:%d: FEATURE NOT SUPPORTED \n", __func__, __LINE__);
     return;
@@ -387,7 +403,7 @@ INT wifi_anqpSendResponse(UINT apIndex, mac_address_t sta, unsigned char token, 
     if(sta){
         snprintf(macStr, MAC_STR_LEN, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
              sta[0], sta[1], sta[2], sta[3], sta[4], sta[5]);
-             wifi_anqp_dbg_print(1, "%s:%d: converted mac: %s\n", __func__, __LINE__,macStr);
+             wifi_anqp_dbg_print(1, "%s:%d: converted mac: %s ap_index=%d\n", __func__, __LINE__,macStr,apIndex);
     }
 
     wifi_anqp_dbg_print(1, "%s:%d: wifi_anqpSendResponse start on AP: %d \n", __func__,__LINE__,apIndex+1);
@@ -618,6 +634,8 @@ INT wifi_anqpSendResponse(UINT apIndex, mac_address_t sta, unsigned char token, 
     anqp_gas_initial_response_frame->rsp_len = total_length;
     memcpy(anqp_gas_initial_response_frame->rsp_body, anqpBuffer, total_length);
 
+   wifi_anqp_dbg_print(1, "we have a gas query response to fill the buffer\n", __func__, __LINE__);
+#if !defined (RDK_ONEWIFI)
     ULONG hm_channel = 0;
     UINT radioIndex = apIndex % 2;
     wifi_getRadioChannel(radioIndex, &hm_channel);
@@ -629,6 +647,9 @@ INT wifi_anqpSendResponse(UINT apIndex, mac_address_t sta, unsigned char token, 
     wifi_anqp_dbg_print(1, "%s:%d: apIndex for sending the frame out: %d\n", __func__, __LINE__, apIndex + 1);
 
     wifi_sendActionFrame(apIndex, sta, freq, (unsigned char *)anqp_gas_initial_response_frame, sizeof(wifi_anqpResponseFrame_t) + total_length);
+#else
+    wifi_hal_send_mgmt_frame(apIndex,  sta,(unsigned char *)anqp_gas_initial_response_frame,(sizeof(wifi_anqpResponseFrame_t) + total_length),0);
+#endif
     wifi_anqp_dbg_print(1, "%s:%d: wifi_anqpSendResponse exit\n", __func__, __LINE__);
     return RETURN_OK;
 }

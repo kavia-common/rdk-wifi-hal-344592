@@ -596,6 +596,20 @@ int get_sec_channel_offset(wifi_radio_info_t *radio, int freq);
 int get_bw80_center_freq(wifi_radio_operationParam_t *param, const char *country);
 int get_bw160_center_freq(wifi_radio_operationParam_t *param, const char *country);
 int pick_akm_suite(int sel);
+void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const u8 *data,size_t data_len,unsigned int freq);
+#if HOSTAPD_VERSION >= 210 //2.10
+ int wifi_drv_send_mlme(void *priv, const u8 *data,
+                                          size_t data_len,int noack,
+                      unsigned int freq, const u16 *csa_offs,
+                      size_t csa_offs_len, int no_encrypt,
+                      unsigned int wait);
+#else
+ int wifi_drv_send_mlme(void *priv, const u8 *data,
+                                          size_t data_len, int noack,
+                                          unsigned int freq,
+                                          const u16 *csa_offs,
+                                          size_t csa_offs_len);
+#endif
 
 BOOL is_wifi_hal_vap_private(UINT ap_index);
 BOOL is_wifi_hal_vap_xhs(UINT ap_index);
