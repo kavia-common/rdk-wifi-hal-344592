@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include "wifi_hal_priv.h"
 #include "wifi_hal.h"
 
 int platform_preinit()
