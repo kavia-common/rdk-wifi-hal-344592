@@ -248,9 +248,30 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     //wifi_hal_dbg_print("%s:%d: BSS Event %d (%s) received for %s\n", __func__, __LINE__,
            //gnlh->cmd, nl80211_command_to_string(gnlh->cmd),
            //interface->name);
-
-    if (gnlh->cmd != NL80211_CMD_FRAME) {
+    
+    if ((gnlh->cmd != NL80211_CMD_FRAME) && (gnlh->cmd != NL80211_CMD_UNEXPECTED_FRAME)) {
         wifi_hal_error_print("%s:%d: Unknown event\n", __func__, __LINE__);
+        return NL_SKIP;
+    }
+
+    if (gnlh->cmd == NL80211_CMD_UNEXPECTED_FRAME) {
+        union wpa_event_data event;
+
+        os_memset(&event, 0, sizeof(event));
+
+        event.rx_from_unknown.bssid = &interface->mac[0];
+
+        if (!tb[NL80211_ATTR_MAC]) {
+            wifi_hal_error_print("%s:%d: FAIL: No peer MAC address in RX_FROM_UNKNOWN event.\n", __func__, __LINE__);
+            return NL_SKIP;
+        }
+        event.rx_from_unknown.addr = nla_get_string(tb[NL80211_ATTR_MAC]);
+
+        event.rx_from_unknown.wds = 0;
+        
+        wifi_hal_dbg_print("%s%d: received spurious frame event on interface %s sent to hostapd.\n", __func__, __LINE__, interface->name);
+        wpa_supplicant_event(&interface->u.ap.hapd, EVENT_RX_FROM_UNKNOWN, &event);
+
         return NL_SKIP;
     }
 
@@ -7955,6 +7976,50 @@ int wifi_hal_purgeScanResult(unsigned int vap_index, unsigned char *sta_mac)
     return RETURN_OK;
 }
 
+static int spurious_frame_register_handler(struct nl_msg *msg, void *arg)
+{
+    wifi_hal_dbg_print("%s:%d:Enter\n", __func__, __LINE__);
+
+    return NL_SKIP;
+}
+
+int nl80211_register_spurious_frames(wifi_interface_info_t *interface)
+{
+    struct nl_msg *msg;
+    int ret = 0;
+
+    wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
+
+    msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_UNEXPECTED_FRAME);
+    if (msg == NULL) {
+        wifi_hal_error_print("%s:%d: nl80211 driver command msg failure for %s interface\n",
+                    __func__, __LINE__, interface->name);
+        return -1;
+    }
+
+    if (nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index) < 0) {
+        nlmsg_free(msg);
+        return -1;
+    }
+
+    if ((ret = execute_send_and_recv(interface->nl_cb, interface->nl_event, msg, spurious_frame_register_handler, interface, NULL, NULL))) {
+        if ((-ret) == EALREADY) {
+            wifi_hal_dbg_print("%s:%d: spurious frames already registered\n", __func__, __LINE__);
+        } else if ((-ret) == EBUSY) {
+            wifi_hal_dbg_print("%s:%d:  Not performed. Interface %d device busy.\n", __func__, __LINE__, interface->phy_index);
+        } else {
+            wifi_hal_error_print("%s:%d: Error registering for spurious frames on interface %s error: %d (%s)\n",
+                __func__, __LINE__, interface->name, ret, strerror(-ret));
+            return -1;
+        }
+    }
+
+    wifi_hal_dbg_print("%s:%d: Exit\n", __func__, __LINE__);
+
+    return 0;
+}
+
+
 int wifi_drv_set_operstate(void *priv, int state)
 {
     wifi_interface_info_t *interface;
@@ -7990,9 +8055,15 @@ int wifi_drv_set_operstate(void *priv, int state)
         return 0;
     }
 
-    if ((vap->vap_mode == wifi_vap_mode_ap) && (nl80211_register_mgmt_frames(interface) != 0)) {
-        wifi_hal_error_print("%s:%d: Failed to register for management frames\n", __func__, __LINE__);
-        return -1;
+    if (vap->vap_mode == wifi_vap_mode_ap) {
+        if (nl80211_register_mgmt_frames(interface) != 0) {
+            wifi_hal_error_print("%s:%d: Failed to register for management frames\n", __func__, __LINE__);
+            return -1;
+        }
+        if (nl80211_register_spurious_frames(interface) != 0) {
+            wifi_hal_error_print("%s:%d: Failed to register spurious frames\n", __func__, __LINE__);
+            return -1;
+        }
     }
 
     if (vap->vap_mode == wifi_vap_mode_sta) {
