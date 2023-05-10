@@ -461,7 +461,7 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
         goto Exit;
     }
 
-    if (radio->configured && radio->oper_param.enable && (((operationParam->autoChannelEnabled == FALSE) && (radio->oper_param.channel != operationParam->channel)) || radio->oper_param.channelWidth != operationParam->channelWidth)) {
+    if (radio->configured && radio->oper_param.enable && (radio->oper_param.channel != operationParam->channel || radio->oper_param.channelWidth != operationParam->channelWidth)) {
         radio->oper_param.channel = operationParam->channel;
         radio->oper_param.channelWidth = operationParam->channelWidth;
         radio->oper_param.op_class = operationParam->op_class;
