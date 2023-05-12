@@ -954,6 +954,10 @@ int init_hostap_hw_features(wifi_interface_info_t *interface)
         return RETURN_ERR;
     }
 
+    for (int n = 0; n < iface->num_hw_features; n++) {
+         memcpy(&radio->hw_modes[n], &iface->hw_features[n], sizeof(struct hostapd_hw_modes));
+    }
+
     nlmode = wpa_driver_nl80211_if_type(WPA_IF_AP_BSS);
 
     /* Replace the default value if a per-interface type value exists */
@@ -1334,9 +1338,11 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     }
 
     if (param->variant & WIFI_80211_VARIANT_AX) {
-        iconf->hw_mode = HOSTAPD_MODE_IEEE80211ANY;
         if (param->band == WIFI_FREQUENCY_5_BAND) {
+            iconf->hw_mode = HOSTAPD_MODE_IEEE80211A;
             iconf->ieee80211ac = 1;
+        } else {
+            iconf->hw_mode = HOSTAPD_MODE_IEEE80211G;
         }
         iconf->ieee80211ax = 1;
         iconf->ieee80211n = 1;
