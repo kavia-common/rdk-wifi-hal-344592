@@ -664,6 +664,10 @@ void recv_link_status()
                                     }
                                     break;
                                 case RTM_NEWLINK:
+                                    if (interface->u.ap.br_sock_fd != 0) {
+                                        close(interface->u.ap.br_sock_fd);
+                                        interface->u.ap.br_sock_fd = 0;
+                                    }
                                     if (interface->u.ap.br_sock_fd == 0) {
                                         wifi_hal_info_print("%s:%d: %s BRIDGE IS CREATED\n", __func__, __LINE__, interface->vap_info.bridge_name);
                                         sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_EAPOL));
@@ -6024,7 +6028,7 @@ int wifi_drv_hapd_send_eapol(
 
     if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_CONTROL_PORT_FRAME) {
         if ((ret = nl80211_tx_control_port(interface, addr, ETH_P_EAPOL, data, data_len, !encrypt))) {
-            wifi_hal_dbg_print("%s:%d: eapol send failed\n", __func__, __LINE__);
+            wifi_hal_dbg_print("%s:%d: eapol send failed ret=%d \n", __func__, __LINE__,ret);
             return -1;
         }
 
@@ -6038,9 +6042,9 @@ int wifi_drv_hapd_send_eapol(
     memcpy(buff + sizeof(struct ieee8023_hdr), data, data_len);
 
     //my_print_hex_dump(data_len + sizeof(struct ieee8023_hdr), buff);
-    if (send((vap->vap_mode == wifi_vap_mode_ap) ? interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd,
-            buff, data_len + sizeof(struct ieee8023_hdr), flags) < 0) {
-        wifi_hal_error_print("%s:%d: eapol send failed\n", __func__, __LINE__);
+    if ((ret = send((vap->vap_mode == wifi_vap_mode_ap) ? interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd,
+            buff, data_len + sizeof(struct ieee8023_hdr), flags)) < 0) {
+        wifi_hal_error_print("%s:%d: eapol send failed ret=%d\n", __func__, __LINE__,ret);
         return -1;
     }
 
