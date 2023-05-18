@@ -666,14 +666,14 @@ void recv_link_status()
                                 case RTM_NEWLINK:
                                     if (interface->u.ap.br_sock_fd == 0) {
                                         wifi_hal_info_print("%s:%d: %s BRIDGE IS CREATED\n", __func__, __LINE__, interface->vap_info.bridge_name);
-                                        sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+                                        sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_EAPOL));
 
                                         if (sock_fd < 0) {
                                             wifi_hal_error_print("%s:%d: Failed to open raw socket on bridge: %s\n", __func__, __LINE__, interface->vap_info.bridge_name);
                                         } else {
                                             memset(&sockaddr, 0, sizeof(struct sockaddr_ll));
                                             sockaddr.sll_family   = AF_PACKET;
-                                            sockaddr.sll_protocol = htons(ETH_P_ALL);
+                                            sockaddr.sll_protocol = htons(ETH_P_EAPOL);
                                             sockaddr.sll_ifindex  = if_nametoindex(interface->vap_info.bridge_name);
 
                                             if (bind(sock_fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
@@ -8078,7 +8078,7 @@ int wifi_drv_set_operstate(void *priv, int state)
         }
     }
 
-    sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_EAPOL));
     if (sock_fd < 0) {
         wifi_hal_error_print("%s:%d: Failed to open raw socket on bridge: %s\n", __func__, __LINE__, vap->bridge_name);
         return -1;
@@ -8088,7 +8088,7 @@ int wifi_drv_set_operstate(void *priv, int state)
 
     memset(&sockaddr, 0, sizeof(struct sockaddr_ll));
     sockaddr.sll_family   = AF_PACKET;
-    sockaddr.sll_protocol = htons(ETH_P_ALL);
+    sockaddr.sll_protocol = htons(ETH_P_EAPOL);
     sockaddr.sll_ifindex  = if_nametoindex(ifname);
 
     if (bind(sock_fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
