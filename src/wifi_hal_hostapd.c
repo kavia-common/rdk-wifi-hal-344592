@@ -833,7 +833,11 @@ int update_hostap_bss(wifi_interface_info_t *interface)
         wifi_hal_dbg_print(" %s:%d:vlan_id is %d  \n", __func__, __LINE__,vlan_id);
         conf->ap_vlan = vlan_id;
     }
-
+#if HOSTAPD_VERSION >= 210 
+    int preassoc_min_mcs = convert_string_mcs_to_int(vap->u.bss_info.preassoc.minimum_advertised_mcs);
+    conf->min_adv_mcs = preassoc_min_mcs;
+    wifi_hal_dbg_print("%s:%d:min_adv_mcs is %d  and ifacename is %s\n", __func__, __LINE__,conf->min_adv_mcs,conf->iface);
+#endif
     /* IEEE 802.11u - Interworking */
     conf->interworking = vap->u.bss_info.interworking.interworking.interworkingEnabled;
     //access_network_type
@@ -1020,6 +1024,10 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     struct hostapd_rate_data *rate;
     unsigned int global_op_class;
     int freq1;
+    int *preassoc_basic_rates={0};
+    int *preassoc_supp_rates={0};
+    char basic_buf[32] = {0};
+    char supp_buf[32] ={0};
     
     if (interface == NULL) {
         return RETURN_ERR;
@@ -1038,6 +1046,17 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     iface->bss = interface->u.ap.hapds;
     interface->u.ap.hapds[0] = &interface->u.ap.hapd;
 
+    wifi_hal_info_print("%s:%d: Interface: %s basic_data_transmit_rates:%s, supported_data_transmit_rates:%s\n", __func__, __LINE__,
+        interface->name, vap->u.bss_info.preassoc.basic_data_transmit_rates, vap->u.bss_info.preassoc.supported_data_transmit_rates);
+    if ((strlen (vap->u.bss_info.preassoc.basic_data_transmit_rates) > 0) && strcmp(vap->u.bss_info.preassoc.basic_data_transmit_rates, "disabled")) {
+        snprintf(basic_buf, sizeof(basic_buf), "%s", vap->u.bss_info.preassoc.basic_data_transmit_rates);
+        convert_string_to_int(&preassoc_basic_rates,basic_buf);
+    }
+    if ((strlen (vap->u.bss_info.preassoc.supported_data_transmit_rates) > 0) && strcmp(vap->u.bss_info.preassoc.supported_data_transmit_rates, "disabled")) {
+      snprintf(supp_buf, sizeof(supp_buf), "%s", vap->u.bss_info.preassoc.supported_data_transmit_rates);
+      convert_string_to_int(&preassoc_supp_rates,supp_buf);
+    }
+    
     switch (radio->oper_param.band) {
     case WIFI_FREQUENCY_2_4_BAND:
         band = NL80211_BAND_2GHZ;
@@ -1085,7 +1104,10 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         memcpy(radio->basic_rates[band], basic_rates_a, sizeof(basic_rates_a));
         mode->mode = HOSTAPD_MODE_IEEE80211A;
     }
-   
+
+
+    wifi_hal_info_print("%s:%d: Interface: %s band: %d mode:%p has %d rates\n", __func__, __LINE__, 
+        interface->name, band, mode, mode->num_rates);   
     iface->num_rates = 0; 
     for (i = 0; i < mode->num_rates; i++) {
 /*
@@ -1095,10 +1117,27 @@ int update_hostap_iface(wifi_interface_info_t *interface)
             continue;
 */
 
+        if (preassoc_supp_rates &&
+              !hostapd_rate_found(preassoc_supp_rates,
+                      mode->rates[i])) {
+              continue;
+        }
         rate = &iface->current_rates[iface->num_rates];
         rate->rate = mode->rates[i];
-        if (hostapd_rate_found(iface->basic_rates, rate->rate)) {
+        if (preassoc_basic_rates) { 
+            if (hostapd_rate_found(preassoc_basic_rates, rate->rate)) {
             rate->flags |= HOSTAPD_RATE_BASIC;
+            }
+            else {
+              rate->flags &= ~(HOSTAPD_RATE_BASIC);
+            }
+        } else {
+          if (hostapd_rate_found(iface->basic_rates, rate->rate)) {
+              rate->flags |= HOSTAPD_RATE_BASIC;
+          }
+          else {
+            rate->flags &= ~(HOSTAPD_RATE_BASIC);
+          }
         }
         wifi_hal_dbg_print("%s:%d: RATE[%d] rate=%d flags=0x%x\n", __func__, __LINE__,
             iface->num_rates, rate->rate, rate->flags);
@@ -1189,6 +1228,14 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         iface->conf->vht_capab |= VHT_CAP_SUPP_CHAN_WIDTH_160MHZ;
     }
 #endif
+    if(preassoc_supp_rates) {
+      os_free(preassoc_supp_rates);
+      preassoc_supp_rates = NULL;
+    }
+    if(preassoc_basic_rates) {
+      os_free(preassoc_basic_rates);
+      preassoc_basic_rates = NULL;
+    }
 
     return RETURN_OK;
 }
@@ -1291,7 +1338,7 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
      * by default to indicate that the regulations encompass all
      * environments for the current frequency band in the country. */
     iconf->rssi_reject_assoc_rssi = 0;
-    iconf->rssi_reject_assoc_timeout = 30;
+    iconf->rssi_reject_assoc_timeout = 3;
 
 #ifdef CONFIG_AIRTIME_POLICY
 //Not defined

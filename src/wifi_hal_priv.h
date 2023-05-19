@@ -189,6 +189,10 @@ extern "C" {
 
 #define MAX_WPS_CONN_TIMEOUT        120
 
+#define MGMT_FRAME_RESPONSE_STATUS_OK 0
+#define MGMT_FRAME_RESPONSE_STATUS_DENY 1
+#define MAX_APPS 12
+
 extern const struct wpa_driver_ops g_wpa_driver_nl80211_ops;
 
 typedef struct wifi_enum_to_str_map
@@ -443,6 +447,11 @@ typedef struct {
 } wifi_netlink_thread_info_t;
 
 typedef struct {
+    unsigned int num_hooks;
+    wifi_hal_frame_hook_fn_t frame_hooks_fn[MAX_APPS];
+} wifi_device_frame_hooks_t;
+
+typedef struct {
     pthread_t nl_tid;
     pthread_t hapd_eloop_tid;
     fd_set   drv_rfds;
@@ -458,6 +467,7 @@ typedef struct {
     wifi_device_callbacks_t device_callbacks;
     wifi_hal_platform_flags_t platform_flags;
     pthread_mutex_t	nl_create_socket_lock;
+    wifi_device_frame_hooks_t hooks;
     hash_map_t  *netlink_socket_map;
 #if HAL_IPC
     wifi_app_info_t app_info;
@@ -555,6 +565,7 @@ INT wifi_hal_ssid_init(char *ssid, int vap_index);
 INT wifi_hal_keypassphrase_init(char *password, int vap_index);
 INT wifi_hal_wps_pin_init(char *pin);
 INT wifi_hal_hostApGetErouter0Mac(char *out);
+INT wifi_hal_send_mgmt_frame_response(int ap_index, int type, int status, int status_code, uint8_t *frame, uint8_t *mac, int len, int rssi);
 INT wifi_hal_getHalCapability(wifi_hal_capability_t *hal);
 INT wifi_hal_connect(INT ap_index, wifi_bss_info_t *bss);
 INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
@@ -597,7 +608,9 @@ int nl80211_init_radio_info();
 int getIpStringFromAdrress(char * ipString,  ip_addr_t * ip);
 int create_ecomode_interfaces(void);
 void update_ecomode_radio_capabilities(wifi_radio_info_t *radio);
-
+int convert_string_to_int(int **int_list, char *val);
+int print_rate_list(int *list);
+int convert_string_mcs_to_int(char *string_mcs);
 int init_nl80211();
 void wifi_hal_nl80211_wps_pbc(unsigned int ap_index);
 int wifi_hal_nl80211_wps_pin(unsigned int ap_index, char *wps_pin);
@@ -673,6 +686,8 @@ wifi_radio_info_t *get_radio_by_phy_index(wifi_radio_index_t index);
 wifi_radio_info_t *get_radio_by_rdk_index(wifi_radio_index_t index);
 int set_interface_properties(unsigned int phy_index, wifi_interface_info_t *interface);
 int get_op_class_from_radio_params(wifi_radio_operationParam_t *param);
+void wifi_send_wpa_supplicant_event(int ap_index, uint8_t *frame, int len);
+int wifi_send_response_failure(int ap_index, const u8 *mac, int frame_type, int status_code, int rssi);
 wifi_interface_info_t* get_primary_interface(wifi_radio_info_t *radio);
 int nl80211_disconnect_sta(wifi_interface_info_t *interface);
 int wifi_hal_purgeScanResult(unsigned int vap_index, unsigned char *sta_mac);
@@ -695,6 +710,8 @@ int get_bw80_center_freq(wifi_radio_operationParam_t *param, const char *country
 int get_bw160_center_freq(wifi_radio_operationParam_t *param, const char *country);
 int pick_akm_suite(int sel);
 void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const u8 *data,size_t data_len,unsigned int freq);
+int wifi_drv_sta_disassoc(void *priv, const u8 *own_addr, const u8 *addr, u16 reason);
+void wifi_hal_disassoc(int vap_index, int status, uint8_t *mac);
 #if HOSTAPD_VERSION >= 210 //2.10
  int wifi_drv_send_mlme(void *priv, const u8 *data,
                                           size_t data_len,int noack,
@@ -745,6 +762,7 @@ void wifi_hal_print(wifi_hal_log_level_t level, const char *format, ...)__attrib
 
 bool lsmod_by_name(const char *name);
 wifi_device_callbacks_t *get_hal_device_callbacks();
+wifi_device_frame_hooks_t *get_device_frame_hooks();
 char *get_wifi_drv_name();
 wifi_device_info_t get_device_info_details();
 typedef char * PCHAR;

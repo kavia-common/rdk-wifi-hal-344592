@@ -42,6 +42,7 @@
 #include "wifi_hal_priv.h"
 #include "wpa_auth_i.h"
 #include "driver_nl80211.h"
+#include "ieee802_11.h"
 #include "ap/sta_info.h"
 #include <sys/wait.h>
 
@@ -592,6 +593,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     u16 reason = 0;
     wifi_device_callbacks_t *callbacks;
     wifi_steering_event_t steering_evt;
+    wifi_device_frame_hooks_t *hooks;
     struct sta_info *station = NULL;
     wifi_frame_t mgmt_frame;
     int sig_dbm = -100;
@@ -638,6 +640,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     }
 
     callbacks = get_hal_device_callbacks();
+    hooks = get_device_frame_hooks();
     mgmt = (struct ieee80211_mgmt *)nla_data(attr);
     len = nla_len(attr);
 
@@ -851,6 +854,12 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir);
 #endif
 #endif
+
+        for (unsigned int i = 0; i < hooks->num_hooks; i++) {
+            if (hooks->frame_hooks_fn[i](vap->vap_index, mgmt_type) == NL_SKIP) {
+                return NL_SKIP;
+            }
+        }
     }
 
     //mgmt_frame_received_callback(vap->vap_index, sta, mgmt, len, mgmt_type, dir);
@@ -6175,6 +6184,52 @@ send_frame_cmd:
     return res;
 }
 
+/* The purpose of this function is to allow user send response to auth/assoc
+ * requests with specific failure directly without using wpa_supplicant_event.
+*/
+int wifi_send_response_failure(int ap_index, const u8 *mac, int frame_type, int status_code, int rssi)
+{
+    int ret = 0;
+    wifi_interface_info_t *interface = get_interface_by_vap_index(ap_index);
+    struct hostapd_data *hapd = &interface->u.ap.hapd;
+
+
+    switch(frame_type) {
+        case WLAN_FC_STYPE_ASSOC_RESP:
+            #if HOSTAPD_VERSION >= 210 //2.10
+                send_assoc_resp(hapd, NULL, mac, status_code, 0, NULL, 0, rssi, 1);
+            #else
+                send_assoc_resp(hapd, NULL, mac, status_code, 0, NULL, 0, rssi);
+            #endif
+            break;
+        case WLAN_FC_STYPE_REASSOC_RESP:
+            #if HOSTAPD_VERSION >= 210 //2.10
+                send_assoc_resp(hapd, NULL, mac, status_code, 1, NULL, 0, rssi, 1);
+            #else
+                send_assoc_resp(hapd, NULL, mac, status_code, 1, NULL, 0, rssi);
+            #endif
+            break;
+        default:
+            break;
+    }
+
+    return ret;
+}
+
+/* The purpose of this function is to allow apps to send response to mgmt frames
+ * directly if it was blocked in process_mgmt_frames
+*/
+void wifi_send_wpa_supplicant_event(int ap_index, uint8_t *frame, int len)
+{
+    union wpa_event_data event;
+    wifi_interface_info_t *interface = get_interface_by_vap_index(ap_index);
+
+    os_memset(&event, 0, sizeof(event));
+    event.rx_mgmt.frame = (unsigned char *)frame;
+    event.rx_mgmt.frame_len = len;
+    wpa_supplicant_event(&interface->u.ap.hapd, EVENT_RX_MGMT, &event);
+}
+
 int wifi_drv_sta_disassoc(void *priv, const u8 *own_addr, const u8 *addr, u16 reason)
 {
     wifi_interface_info_t *interface;
@@ -6319,7 +6374,7 @@ int wifi_drv_sta_deauth(void *priv, const u8 *own_addr, const u8 *addr, u16 reas
     mgmt.u.deauth.reason_code = host_to_le16(reason);
 #if HOSTAPD_VERSION >= 210 //2.10
     return wifi_drv_send_mlme(priv, (u8 *) &mgmt,
-                                IEEE80211_HDRLEN + sizeof(mgmt.u.disassoc), 0, 0, NULL, 0, 0, 0);
+                                IEEE80211_HDRLEN + sizeof(mgmt.u.deauth), 0, 0, NULL, 0, 0, 0);
 #else
     return wifi_drv_send_mlme(priv, (u8 *) &mgmt,
                               IEEE80211_HDRLEN + sizeof(mgmt.u.deauth), 0, 0, NULL, 0);

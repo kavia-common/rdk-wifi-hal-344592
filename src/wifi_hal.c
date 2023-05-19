@@ -353,6 +353,20 @@ INT wifi_hal_hostApGetErouter0Mac(char *out)
     return RETURN_OK;
 }
 
+INT wifi_hal_send_mgmt_frame_response(int ap_index, int type, int status, int status_code, uint8_t *frame, uint8_t *mac, int len, int rssi)
+{
+    if (status == MGMT_FRAME_RESPONSE_STATUS_OK) {
+        wifi_send_wpa_supplicant_event(ap_index, frame, len);
+    } else if (status == MGMT_FRAME_RESPONSE_STATUS_DENY) {
+        wifi_send_response_failure(ap_index, mac, type, status_code, rssi);
+    } else {
+        wifi_hal_error_print("%s:%d: Undefined status\n", __func__, __LINE__);
+        return RETURN_ERR;
+    }
+
+    return RETURN_OK;
+}
+
 INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam)
 {
     wifi_radio_info_t *radio;
@@ -720,6 +734,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         interface = get_interface_by_vap_index(vap->vap_index);
 
         wifi_hal_dbg_print("%s:%d:vap_index:%d\r\n",__func__, __LINE__, vap->vap_index);
+        wifi_hal_dbg_print("%s:%d: vap_index:%d name:%s basic_transmit_rates:%s, oper_transmit_rates:%s, supp_transmit_rates:%s min_adv_mcs:%s 6GOpInfoMinRate:%s\n",__func__, __LINE__, vap->vap_index, interface->name,vap->u.bss_info.preassoc.basic_data_transmit_rates,vap->u.bss_info.preassoc.operational_data_transmit_rates,vap->u.bss_info.preassoc.supported_data_transmit_rates,vap->u.bss_info.preassoc.minimum_advertised_mcs,vap->u.bss_info.preassoc.sixGOpInfoMinRate);
         if (interface == NULL) {
             wifi_hal_info_print("%s:%d:Could not find vap index:%d on radio:%d\n", __func__, __LINE__, vap->vap_index, index);
             
@@ -1423,6 +1438,14 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
     return (nl80211_start_scan(interface, num, freq_list, 1, dwell_time, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
 }
 
+void wifi_hal_register_frame_hook(wifi_hal_frame_hook_fn_t func)
+{
+    wifi_device_frame_hooks_t   *hooks;
+    hooks = get_device_frame_hooks();
+    hooks->frame_hooks_fn[hooks->num_hooks] = func;
+    hooks->num_hooks++;
+}
+
 INT wifi_hal_mgmt_frame_callbacks_register(wifi_receivedMgmtFrame_callback func)
 {
     wifi_device_callbacks_t *callbacks;
@@ -1610,6 +1633,13 @@ wifi_device_callbacks_t *get_hal_device_callbacks()
 {
     return &g_wifi_hal.device_callbacks;
 }
+
+wifi_device_frame_hooks_t *get_device_frame_hooks()
+{
+    return &g_wifi_hal.hooks;
+}
+
+
 void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const unsigned char *data,size_t data_len,unsigned int freq)
 {
 
@@ -1643,4 +1673,12 @@ void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const unsigned char
 
     os_free(buf);
     wifi_hal_dbg_print("%s:%d:Exit for mgmt fame on %d\n", __func__, __LINE__, apIndex);
+}
+
+void wifi_hal_disassoc(int vap_index, int status, uint8_t *mac)
+{
+    wifi_interface_info_t *interface = get_interface_by_vap_index(vap_index);
+    struct hostapd_data *hapd = &interface->u.ap.hapd;
+
+    wifi_drv_sta_disassoc(interface, hapd->own_addr, mac, status);
 }
