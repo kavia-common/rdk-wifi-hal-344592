@@ -800,8 +800,9 @@ int update_hostap_bss(wifi_interface_info_t *interface)
         conf->wps_state = 0;
     }
 
-    //wme_enabled
+    //wme_enabled, uapsd_enabled
     conf->wmm_enabled = vap->u.bss_info.wmm_enabled;
+    conf->wmm_uapsd = vap->u.bss_info.UAPSDEnabled;
 
     if (update_security_config(&vap->u.bss_info.security, conf) == -1) {
         wifi_hal_error_print("%s:%d:update_security_config failed \n", __func__, __LINE__);
