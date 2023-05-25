@@ -84,8 +84,8 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
 {
     wifi_hal_dbg_print("%s \n", __func__);
 
-    wifi_hal_info_print("%s:%d: start_security_apps\n", __func__, __LINE__);
-    v_secure_system("wifi_setup.sh start_security_apps");
+    wifi_hal_info_print("%s:%d: start_wifi_apps\n", __func__, __LINE__);
+    v_secure_system("wifi_setup.sh start_wifi_apps");
 
     return 0;
 }

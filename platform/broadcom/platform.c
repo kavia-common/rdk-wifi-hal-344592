@@ -293,8 +293,8 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
     memset(param_name, 0 ,sizeof(param_name));
     memset(interface_name, 0, sizeof(interface_name));
 
-    wifi_hal_info_print("%s:%d: start_security_apps\n", __func__, __LINE__);
-    system("wifi_setup.sh start_security_apps");
+    wifi_hal_info_print("%s:%d: start_wifi_apps\n", __func__, __LINE__);
+    system("wifi_setup.sh start_wifi_apps");
 
     wifi_hal_dbg_print("%s:%d: add wifi interfaces to flow manager\r\n", __func__, __LINE__);
     system("wifi_setup.sh add_ifaces_to_flowmgr");
