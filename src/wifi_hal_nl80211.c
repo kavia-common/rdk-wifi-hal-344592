@@ -893,11 +893,28 @@ void recv_data_frame(wifi_interface_info_t *interface)
 
     //Receive a network packet and copy in to buffer
     buflen = recvfrom((vap->vap_mode == wifi_vap_mode_ap) ? interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd,
-        buff, sizeof(buff), 0, &saddr, (socklen_t *)&saddr_len);
+        buff, sizeof(buff), MSG_DONTWAIT, &saddr, (socklen_t *)&saddr_len);
+    if (buflen < 0) {
+        wifi_hal_info_print("%s:%d: failed to receive packet, err: %d (%s)\n", __func__, __LINE__,
+            errno, strerror(errno));
+        return;
+    }
+
+    if (buflen == 0) {
+        wifi_hal_info_print("%s:%d: vap %s socket was closed\n", __func__, __LINE__,
+            vap->vap_name);
+        return;
+    }
     //wifi_hal_dbg_print("%s:%d: %s bridge descriptor set, received %d bytes of data\n", __func__, __LINE__,
         //interface->name, buflen);
 
     //my_print_hex_dump(buflen, buff);
+    if (buflen < sizeof(struct ieee8023_hdr)) {
+        wifi_hal_info_print("%s:%d: packet is too short, len=%d\n", __func__, __LINE__,
+            buflen);
+        return;
+    }
+
     eth_hdr = (struct ieee8023_hdr *)buff;
 
     if (eth_hdr->ethertype != host_to_be16(ETH_P_EAPOL)) {
@@ -919,6 +936,11 @@ void recv_data_frame(wifi_interface_info_t *interface)
 
 
     //data_frame_received_callback(vap->vap_index, sta, buff, buflen, WIFI_DATA_FRAME_TYPE_8021x, dir);
+    if (buflen < sizeof(struct ieee8023_hdr) + sizeof(struct ieee802_1x_hdr)) {
+        wifi_hal_info_print("%s:%d: packet is too short, len=%d\n", __func__, __LINE__,
+            buflen);
+        return;
+    }
 
     hdr = (struct ieee802_1x_hdr *)(buff + sizeof(struct ieee8023_hdr));
     wifi_hal_dbg_print("%s:%d:version:%d type:%d length:%d\n", __func__, __LINE__,
