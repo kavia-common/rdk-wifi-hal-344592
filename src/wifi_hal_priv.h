@@ -356,6 +356,10 @@ typedef struct {
     int nl_event_fd;
     struct nl_cb *nl_cb;
 
+    struct nl_handle *spurious_nl_event;
+    int spurious_nl_event_fd;
+    struct nl_cb *spurious_nl_cb;
+
     union {
         wifi_ap_priv_t  ap;
         wifi_sta_priv_t sta;
@@ -371,6 +375,7 @@ typedef struct {
     char   pin[64];
     int beacon_set;
     int mgmt_frames_registered;
+    int spurious_frames_registered;
     hash_map_t  *acl_map;
 
 } wifi_interface_info_t;
@@ -472,6 +477,8 @@ typedef struct {
 #if HAL_IPC
     wifi_app_info_t app_info;
 #endif
+    pthread_mutexattr_t hapd_lock_attr;
+    pthread_mutex_t hapd_lock;
 } wifi_hal_priv_t;
 
 wifi_hal_priv_t g_wifi_hal;

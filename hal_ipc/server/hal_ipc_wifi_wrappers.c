@@ -368,10 +368,12 @@ INT wifi_hal_getAssociationReqIEs(  UINT apIndex,
 
     char* mac = (char*) &clientMacAddress[0];
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     station = ap_get_sta(&interface->u.ap.hapd, mac);
 
     strcpy(req_ies, station->assoc_req);
     *req_ies_len = station->assoc_req_len;
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     return 0;
 }
 
@@ -525,7 +527,9 @@ INT wifi_hal_getApNumDevicesAssociated(INT apIndex, ULONG *output_ulong)
         return -1;
     }
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     *output_ulong = interface->u.ap.hapd.num_sta;
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
     wifi_hal_dbg_print("%s:%d: AP index %d, num assoc devs: %lu.\n", __func__, __LINE__, apIndex, *output_ulong);
 

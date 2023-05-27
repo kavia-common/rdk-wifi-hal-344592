@@ -134,6 +134,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
             mgmt_type = WIFI_MGMT_FRAME_TYPE_DISASSOC;
             wifi_hal_dbg_print("%s:%d: Received disassoc frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
+            pthread_mutex_lock(&g_wifi_hal.hapd_lock);
             station = ap_get_sta(&interface->u.ap.hapd, sta);
             if (station) {
                 if (station->disconnect_reason_code == WLAN_RADIUS_GREYLIST_REJECT) {
@@ -141,6 +142,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                 }
                 ap_free_sta(&interface->u.ap.hapd, station);
             }
+            pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
             for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
                 if (callbacks->disassoc_cb[i] != NULL) {
@@ -174,6 +176,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
             if ((attr = tb[NL80211_ATTR_REASON_CODE]) != NULL) {
                 reason = nla_get_u16(attr);
             }
+            pthread_mutex_lock(&g_wifi_hal.hapd_lock);
             station = ap_get_sta(&interface->u.ap.hapd, sta);
             if (station) {
                 if (station->disconnect_reason_code == WLAN_RADIUS_GREYLIST_REJECT) {
@@ -182,6 +185,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                 }
                 ap_free_sta(&interface->u.ap.hapd, station);
             }
+            pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
             for (int i = 0; i < callbacks->num_apDeAuthEvent_cbs; i++) {
                 if (callbacks->apDeAuthEvent_cb[i] != NULL) {
@@ -239,7 +243,9 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
 #endif
         }
     }
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     wpa_supplicant_event(&interface->u.ap.hapd, EVENT_TX_STATUS, &event);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 }
 
 static void nl80211_new_scan_results_event(wifi_interface_info_t *interface, struct nlattr **tb)
@@ -458,10 +464,12 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
 
     wifi_hal_dbg_print("%s:%d: wifi_chan_event_type:%d\n", __func__, __LINE__, wifi_chan_event_type);
     
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED && interface->u.ap.hapd.csa_in_progress) {
         hostapd_cleanup_cs_params(&interface->u.ap.hapd);
         ieee802_11_set_beacon(&interface->u.ap.hapd);
     }
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
     memset(&radio_channel_param, 0, sizeof(radio_channel_param));
 
@@ -839,7 +847,9 @@ static void ltq_nl80211_handle_flush_stations(struct hostapd_data *hapd,
                              const u8 *data, size_t len)
 {
     wifi_hal_dbg_print("%s:%d: nl80211: Receive LTQ vendor event:Flush Stations\n",  __func__, __LINE__);
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     drv_event_ltq_flush_stations(hapd, data, len);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 }
 
 void nl80211_vendor_event_ltq(wifi_interface_info_t *interface, unsigned int subcmd, unsigned char *data, size_t len)

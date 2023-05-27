@@ -998,8 +998,10 @@ int update_hostap_dtim_period(wifi_radio_info_t *radio)
 
     while (interface != NULL) {
         if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+            pthread_mutex_lock(&g_wifi_hal.hapd_lock);
             conf = &interface->u.ap.conf;
             conf->dtim_period = radio->oper_param.dtimPeriod;
+            pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
         }
         interface = hash_map_get_next(radio->interface_map, interface);
     }
@@ -1255,7 +1257,8 @@ int update_hostap_interfaces(wifi_radio_info_t *radio)
     interfaces = &radio->interfaces;
     interfaces->for_each_interface = hostapd_for_each_interface;
     interfaces->iface = radio->iface;
-   
+
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     iconf = &radio->iconf;
     iconf->num_bss = 0; 
     iconf->bss = radio->bss;
@@ -1272,6 +1275,8 @@ int update_hostap_interfaces(wifi_radio_info_t *radio)
         }
         interface = hash_map_get_next(radio->interface_map, interface);
     }
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+
     return RETURN_OK;
 }
 
@@ -1292,6 +1297,8 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     wifi_radio_operationParam_t *param;
 
     param = &radio->oper_param;
+
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
 
     iconf = &radio->iconf;
 
@@ -1436,18 +1443,25 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     
     //validate_config_params
     if (hostapd_config_check(iconf, 1) < 0) {
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
         wifi_hal_error_print("%s:%d:Invalid config params\n", __func__, __LINE__);
         return RETURN_ERR;
     }
+
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+
     wifi_hal_info_print("%s:%d:Exit\n", __func__, __LINE__);
     return RETURN_OK;
 }
 
 int update_hostap_interface_params(wifi_interface_info_t *interface)
 {
+    int ret = RETURN_ERR;
+
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     // initialize the default params
     if (update_hostap_data(interface) != RETURN_OK) {
-        return RETURN_ERR;
+        goto exit;
     }
     if (update_hostap_bss(interface) != RETURN_OK) {
 #ifdef CONFIG_SAE
@@ -1456,7 +1470,7 @@ int update_hostap_interface_params(wifi_interface_info_t *interface)
             interface->u.ap.conf.sae_groups = NULL;
         }
 #endif
-        return RETURN_ERR;
+        goto exit;
     }
     if (update_hostap_iface(interface) != RETURN_OK) {
 #ifdef CONFIG_SAE
@@ -1465,10 +1479,13 @@ int update_hostap_interface_params(wifi_interface_info_t *interface)
             interface->u.ap.conf.sae_groups = NULL;
         }
 #endif
-        return RETURN_ERR;
+        goto exit;
     }
 
-    return RETURN_OK;
+    ret = RETURN_OK;
+exit:
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+    return ret;
 }
 
 static void wpa_sm_sta_set_state(void *ctx, enum wpa_states state)
@@ -2022,6 +2039,8 @@ void start_bss(wifi_interface_info_t *interface)
     //struct hostapd_iface *iface;
     //struct hostapd_config *iconf;
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
+
     hapd = &interface->u.ap.hapd;
     conf = hapd->conf;
     //iconf = hapd->iconf;
@@ -2030,4 +2049,6 @@ void start_bss(wifi_interface_info_t *interface)
     wifi_hal_dbg_print("%s:%d:ssid info ssid len:%d\n", __func__, __LINE__, conf->ssid.ssid_len);
     //my_print_hex_dump(conf->ssid.ssid_len, conf->ssid.ssid);
     hostapd_setup_bss(hapd, 1);
+
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 }

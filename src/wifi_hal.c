@@ -172,6 +172,10 @@ INT wifi_hal_init()
         usleep(5000);
     }
 
+    pthread_mutexattr_init(&g_wifi_hal.hapd_lock_attr);
+    pthread_mutexattr_settype(&g_wifi_hal.hapd_lock_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&g_wifi_hal.hapd_lock, &g_wifi_hal.hapd_lock_attr);
+
     pthread_mutex_init(&g_wifi_hal.nl_create_socket_lock, NULL);
     g_wifi_hal.netlink_socket_map = hash_map_create();
 
@@ -448,17 +452,21 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
                     nl80211_interface_enable(interface->name, false);
                     nl80211_interface_enable(interface->name, true);
                     interface->beacon_set = 0;
+                    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_reload_config(interface->u.ap.hapd.iface);
 #ifdef CONFIG_SAE
                     if (interface->u.ap.conf.sae_groups) {
                         interface->u.ap.conf.sae_groups = NULL;
                     }
 #endif
+                    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
                     nl80211_enable_ap(interface, false);
+                    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_bss_deinit_no_free(&interface->u.ap.hapd);
                     hostapd_free_hapd_data(&interface->u.ap.hapd);
                     if (interface->u.ap.hapd.conf->ssid.wpa_psk && !interface->u.ap.hapd.conf->ssid.wpa_psk->next)
                         hostapd_config_clear_wpa_psk(&interface->u.ap.hapd.conf->ssid.wpa_psk);
+                    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
                     if (update_hostap_interface_params(interface) != RETURN_OK) {
                         return RETURN_ERR;
@@ -798,17 +806,21 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 } else {
                     // reload vaps config
                     interface->beacon_set = 0;
+                    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_reload_config(interface->u.ap.hapd.iface);
 #ifdef CONFIG_SAE
                     if (interface->u.ap.conf.sae_groups) {
                         interface->u.ap.conf.sae_groups = NULL;
                     }
 #endif
+                    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
                     nl80211_enable_ap(interface, false);
+                    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_bss_deinit_no_free(&interface->u.ap.hapd);
                     hostapd_free_hapd_data(&interface->u.ap.hapd);
                     if (interface->u.ap.hapd.conf->ssid.wpa_psk && !interface->u.ap.hapd.conf->ssid.wpa_psk->next)
                         hostapd_config_clear_wpa_psk(&interface->u.ap.hapd.conf->ssid.wpa_psk);
+                    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
                     if (update_hostap_interface_params(interface) != RETURN_OK) {
                         return RETURN_ERR;
@@ -1677,8 +1689,13 @@ void wifi_hal_send_mgmt_frame(int apIndex,mac_address_t sta, const unsigned char
 
 void wifi_hal_disassoc(int vap_index, int status, uint8_t *mac)
 {
+    u8 own_addr[ETH_ALEN];
     wifi_interface_info_t *interface = get_interface_by_vap_index(vap_index);
     struct hostapd_data *hapd = &interface->u.ap.hapd;
 
-    wifi_drv_sta_disassoc(interface, hapd->own_addr, mac, status);
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
+    memcpy(own_addr, hapd->own_addr, ETH_ALEN);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+
+    wifi_drv_sta_disassoc(interface, own_addr, mac, status);
 }

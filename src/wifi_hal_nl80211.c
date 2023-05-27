@@ -88,7 +88,12 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
                                     interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd;
                 FD_SET(sock_fd, &priv->drv_rfds);
                 if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
-                    FD_SET(interface->nl_event_fd, &priv->drv_rfds);
+                    if (interface->mgmt_frames_registered == 1) {
+                        FD_SET(interface->nl_event_fd, &priv->drv_rfds);
+                    }
+                    if (interface->spurious_frames_registered == 1) {
+                        FD_SET(interface->spurious_nl_event_fd, &priv->drv_rfds);
+                    }
                 }
             }
 
@@ -122,8 +127,13 @@ int get_biggest_in_fdset(wifi_hal_priv_t *priv)
                     sock_fd = (vap->vap_mode == wifi_vap_mode_ap) ?
                                     interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd;
                 }
-                if (interface->vap_info.vap_mode == wifi_vap_mode_ap && sock_fd < interface->nl_event_fd) {
-                    sock_fd = interface->nl_event_fd;
+                if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+                    if (sock_fd < interface->nl_event_fd) {
+                        sock_fd = interface->nl_event_fd;
+                    }
+                    if (sock_fd < interface->spurious_nl_event_fd) {
+                        sock_fd = interface->spurious_nl_event_fd;
+                    }
                 }
 
             }
@@ -173,7 +183,9 @@ bool mgmt_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
         radio = &priv->radio_info[i];
         interface = hash_map_get_first(radio->interface_map);
         while (interface != NULL) {
-            if ((interface->vap_configured == true) && (interface->vap_info.vap_mode == wifi_vap_mode_ap) &&
+            if (interface->vap_configured == true &&
+                interface->vap_info.vap_mode == wifi_vap_mode_ap &&
+                interface->mgmt_frames_registered == 1 &&
                     FD_ISSET(interface->nl_event_fd, &priv->drv_rfds)) {
                 found = true;
                 *intf = interface;
@@ -188,6 +200,32 @@ bool mgmt_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
     return found;
 }
 
+static bool spurious_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
+{
+    bool found = false;
+    wifi_radio_info_t *radio;
+    wifi_interface_info_t *interface;
+    unsigned int i;
+
+    for (i = 0; i < priv->num_radios; i++) {
+        radio = &priv->radio_info[i];
+        interface = hash_map_get_first(radio->interface_map);
+        while (interface != NULL) {
+            if (interface->vap_configured == true &&
+                interface->vap_info.vap_mode == wifi_vap_mode_ap &&
+                interface->spurious_frames_registered == 1 &&
+                    FD_ISSET(interface->spurious_nl_event_fd, &priv->drv_rfds)) {
+                found = true;
+                *intf = interface;
+                break;
+            }
+
+            interface = hash_map_get_next(radio->interface_map, interface);
+        }
+    }
+
+    return found;
+}
 
 bool bridge_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
 {
@@ -544,6 +582,7 @@ static bool is_probe_req_to_our_ssid(struct ieee80211_mgmt *mgmt, unsigned int l
     unsigned char *ie;
     unsigned int ie_len, ssid_len;
     char *ssid;
+    int ret;
 
     if (memcmp(mgmt->da, interface->mac, sizeof(mac_address_t)) == 0) {
         return true;
@@ -566,13 +605,18 @@ static bool is_probe_req_to_our_ssid(struct ieee80211_mgmt *mgmt, unsigned int l
         return false;
     }
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     if (ssid_len != interface->u.ap.hapd.conf->ssid.ssid_len) {
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
         return false;
     }
 
     ssid = ie + 2;
 
-    return strncmp(ssid, interface->u.ap.hapd.conf->ssid.ssid, ssid_len) == 0;
+    ret = strncmp(ssid, interface->u.ap.hapd.conf->ssid.ssid, ssid_len) == 0;
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+
+    return ret;
 }
 
 int process_mgmt_frame(struct nl_msg *msg, void *arg)
@@ -629,7 +673,9 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         event.rx_from_unknown.wds = 0;
         
         wifi_hal_dbg_print("%s%d: received spurious frame event on interface %s sent to hostapd.\n", __func__, __LINE__, interface->name);
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         wpa_supplicant_event(&interface->u.ap.hapd, EVENT_RX_FROM_UNKNOWN, &event);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
         return NL_SKIP;
     }
@@ -761,6 +807,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
             reason = nla_get_u16(attr);
         }
 
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         station = ap_get_sta(&interface->u.ap.hapd, sta);
         if (station) {
             wifi_hal_dbg_print("station disassocreason in disassoc frame is %d\n", station->disconnect_reason_code);
@@ -768,7 +815,10 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
                 reason = station->disconnect_reason_code;
             }
             ap_free_sta(&interface->u.ap.hapd, station);
+        }
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
+        if (station) {
             for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
                 if (callbacks->disassoc_cb[i] != NULL) {
                     callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
@@ -797,6 +847,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
             }
         }
 
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         station = ap_get_sta(&interface->u.ap.hapd, sta);
         if (station) {
             wifi_hal_dbg_print("station deauthreason in deauth frame is %d\n", station->disconnect_reason_code);
@@ -804,7 +855,10 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
                 reason = station->disconnect_reason_code;
             }
             ap_free_sta(&interface->u.ap.hapd, station);
+        }
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
+        if (station) {
             for (int i = 0; i < callbacks->num_disassoc_cbs; i++) {
                 if (callbacks->disassoc_cb[i] != NULL) {
                     callbacks->disassoc_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), reason);
@@ -869,7 +923,9 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         os_memset(&event, 0, sizeof(event));
         event.rx_mgmt.frame = (unsigned char *)mgmt;
         event.rx_mgmt.frame_len = len;
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         wpa_supplicant_event(&interface->u.ap.hapd, EVENT_RX_MGMT, &event);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     }
 
     return NL_SKIP;
@@ -950,7 +1006,9 @@ void recv_data_frame(wifi_interface_info_t *interface)
         event.eapol_rx.src = (unsigned char *)&sta;
         event.eapol_rx.data = (unsigned char *)hdr;
         event.eapol_rx.data_len = buflen - sizeof(struct ieee8023_hdr);
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         wpa_supplicant_event(&interface->u.ap.hapd, EVENT_EAPOL_RX, &event);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     } else if (vap->vap_mode == wifi_vap_mode_sta) {
         if (interface->u.sta.wpa_sm) {
             if (!interface->u.sta.wpa_sm->eapol || !eapol_sm_rx_eapol(interface->u.sta.wpa_sm->eapol,(unsigned char *)&sta,
@@ -1186,7 +1244,9 @@ void *nl_recv_func(void *arg)
             }
         }
 
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         eloop_timeout_run();
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
         if (FD_ISSET(priv->nl_event_fd, &priv->drv_rfds)) {
             res = nl_recvmsgs((struct nl_sock *)priv->nl_event, priv->nl_cb);
@@ -1203,6 +1263,15 @@ void *nl_recv_func(void *arg)
             }
         }
 
+        if (spurious_fd_isset(priv, &interface)) {
+            res = nl_recvmsgs((struct nl_sock *)interface->spurious_nl_event,
+                interface->spurious_nl_cb);
+            if (res < 0) {
+                wifi_hal_info_print("%s:%d: spurious nl_recvmsgs failed: %d\n", __func__, __LINE__,
+                    res);
+            }
+        }
+
         if (bridge_fd_isset(priv, &interface)) {
             recv_data_frame(interface);
         }
@@ -1211,7 +1280,9 @@ void *nl_recv_func(void *arg)
             recv_link_status();
         }
 
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         eloop_sock_table_read_dispatch(&priv->drv_rfds);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     }
 
     return NULL;
@@ -4101,7 +4172,9 @@ void wifi_hal_nl80211_wps_pbc(unsigned int ap_index)
     }
 
     os_memset(&event, 0, sizeof(event));
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     wpa_supplicant_event(&interface->u.ap.hapd, EVENT_WPS_BUTTON_PUSHED, &event);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 }
 
 int wifi_hal_nl80211_wps_pin(unsigned int ap_index, char *wps_pin)
@@ -4120,7 +4193,9 @@ int wifi_hal_nl80211_wps_pin(unsigned int ap_index, char *wps_pin)
         return RETURN_ERR;
     }
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     ret = hostapd_wps_add_pin(&interface->u.ap.hapd, NULL, "any", wps_pin, MAX_WPS_CONN_TIMEOUT);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     if (ret != 0) {
         wifi_hal_error_print("%s:%d: WPS pin configuration failure[%d] for interface:%s vap_index:%d\n",
                                 __func__, __LINE__, ret, interface->name, ap_index);
@@ -4136,7 +4211,9 @@ int nl80211_enable_ap(wifi_interface_info_t *interface, bool enable)
     int ret;
 
     if (enable) {
+        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         ieee802_11_update_beacons(interface->u.ap.hapd.iface);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
         return RETURN_OK;
     } else {
         interface->beacon_set = 0;
@@ -4522,6 +4599,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
     while (interface != NULL) {
         if (interface->bss_started) {
             wifi_hal_dbg_print("Switch channel on %s\n", interface->name);
+            pthread_mutex_lock(&g_wifi_hal.hapd_lock);
             hostapd_set_oper_centr_freq_seg1_idx(interface->u.ap.hapd.iconf, 0);
             hostapd_set_oper_centr_freq_seg0_idx(interface->u.ap.hapd.iconf, seg0);
 
@@ -4549,6 +4627,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
                 wifi_hal_error_print("%s:%d: failed to switch channel, ret=%d\n", __func__,
                     __LINE__, ret);
             }
+            pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 #ifndef CMXB7_PORT
             break;
 #endif
@@ -4648,7 +4727,9 @@ Exit:
         while (interface != NULL) {
             if (interface->bss_started) {
                 nl80211_interface_enable(interface->name, true);
+                pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                 ieee802_11_update_beacons(interface->u.ap.hapd.iface);
+                pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
             }
             interface = hash_map_get_next(radio->interface_map, interface);
         }
@@ -6215,6 +6296,7 @@ int wifi_send_response_failure(int ap_index, const u8 *mac, int frame_type, int 
     wifi_interface_info_t *interface = get_interface_by_vap_index(ap_index);
     struct hostapd_data *hapd = &interface->u.ap.hapd;
 
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
 
     switch(frame_type) {
         case WLAN_FC_STYPE_ASSOC_RESP:
@@ -6235,6 +6317,7 @@ int wifi_send_response_failure(int ap_index, const u8 *mac, int frame_type, int 
             break;
     }
 
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     return ret;
 }
 
@@ -6249,7 +6332,9 @@ void wifi_send_wpa_supplicant_event(int ap_index, uint8_t *frame, int len)
     os_memset(&event, 0, sizeof(event));
     event.rx_mgmt.frame = (unsigned char *)frame;
     event.rx_mgmt.frame_len = len;
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
     wpa_supplicant_event(&interface->u.ap.hapd, EVENT_RX_MGMT, &event);
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 }
 
 int wifi_drv_sta_disassoc(void *priv, const u8 *own_addr, const u8 *addr, u16 reason)
@@ -8573,38 +8658,75 @@ static int spurious_frame_register_handler(struct nl_msg *msg, void *arg)
 
 int nl80211_register_spurious_frames(wifi_interface_info_t *interface)
 {
-    struct nl_msg *msg;
+    struct nl_msg *msg = NULL;
     int ret = 0;
 
-    wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
+    if (interface->spurious_frames_registered == 1) {
+        wifi_hal_info_print("%s:%d: spurious frames handler already registered for %s\n", __func__,
+            __LINE__, interface->name);
+        return 0;
+    }
+
+    wifi_hal_info_print("%s:%d: register spurious frames handler for %s\n", __func__, __LINE__,
+        interface->name);
+
+    interface->spurious_nl_cb = nl_cb_alloc(NL_CB_DEFAULT);
+    if (interface->spurious_nl_cb == NULL) {
+        wifi_hal_error_print("%s:%d: failed to alloc nl_cb for %s interface\n", __func__, __LINE__,
+            interface->name);
+        return -1;
+    }
+
+    nl_cb_set(interface->spurious_nl_cb, NL_CB_SEQ_CHECK, NL_CB_CUSTOM, no_seq_check, NULL);
+    nl_cb_set(interface->spurious_nl_cb, NL_CB_VALID, NL_CB_CUSTOM, process_mgmt_frame, interface);
+
+    interface->spurious_nl_event = nl_create_handle(g_wifi_hal.nl_cb, "spurious");
+    if (interface->spurious_nl_event == NULL) {
+        wifi_hal_error_print("%s:%d: failed to create nl handle for %s interface\n", __func__,
+            __LINE__, interface->name);
+        goto error;
+    }
 
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_UNEXPECTED_FRAME);
     if (msg == NULL) {
-        wifi_hal_error_print("%s:%d: nl80211 driver command msg failure for %s interface\n",
-                    __func__, __LINE__, interface->name);
-        return -1;
+        wifi_hal_error_print("%s:%d: failed to create message for %s interface\n", __func__,
+            __LINE__, interface->name);
+        goto error;
     }
 
     if (nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index) < 0) {
-        nlmsg_free(msg);
-        return -1;
+        wifi_hal_error_print("%s:%d: failed set interface index in message for %s interface\n",
+            __func__, __LINE__, interface->name);
+        goto error;
     }
 
-    if ((ret = execute_send_and_recv(interface->nl_cb, interface->nl_event, msg, spurious_frame_register_handler, interface, NULL, NULL))) {
-        if ((-ret) == EALREADY) {
-            wifi_hal_dbg_print("%s:%d: spurious frames already registered\n", __func__, __LINE__);
-        } else if ((-ret) == EBUSY) {
-            wifi_hal_dbg_print("%s:%d:  Not performed. Interface %d device busy.\n", __func__, __LINE__, interface->phy_index);
-        } else {
-            wifi_hal_error_print("%s:%d: Error registering for spurious frames on interface %s error: %d (%s)\n",
-                __func__, __LINE__, interface->name, ret, strerror(-ret));
-            return -1;
-        }
+    ret = execute_send_and_recv(interface->spurious_nl_cb, interface->spurious_nl_event, msg,
+        spurious_frame_register_handler, interface, NULL, NULL);
+    if (ret) {
+        wifi_hal_error_print("%s:%d: failed to register for spurious frames on interface %s, "
+            "error: %d (%s)\n", __func__, __LINE__, interface->name, ret, strerror(-ret));
+        goto error;
     }
 
-    wifi_hal_dbg_print("%s:%d: Exit\n", __func__, __LINE__);
+    interface->spurious_nl_event_fd = nl_socket_get_fd((struct nl_sock *)
+        interface->spurious_nl_event);
+    wifi_hal_dbg_print("%s:%d: nl80211 spurious socket descriptor: %d\n", __func__, __LINE__,
+        interface->spurious_nl_event_fd);
+
+    interface->spurious_frames_registered = 1;
 
     return 0;
+
+error:
+    if (interface->spurious_nl_cb) {
+        nl_cb_put(interface->spurious_nl_cb);
+        interface->spurious_nl_cb = NULL;
+    }
+    if (interface->spurious_nl_event) {
+        nl_destroy_handles(&interface->spurious_nl_event);
+        interface->spurious_nl_event = NULL;
+    }
+    return -1;
 }
 
 
