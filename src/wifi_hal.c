@@ -552,6 +552,8 @@ INT wifi_hal_connect(INT ap_index, wifi_bss_info_t *bss)
     wifi_sta_priv_t *sta;
     int best_rssi = -100;
 
+    NULL_PTR_ASSERT(bss);
+
     if ((interface = get_interface_by_vap_index(ap_index)) == NULL) {
         wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, ap_index);
         return RETURN_ERR;
