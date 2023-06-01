@@ -141,7 +141,6 @@ int nvram_get_default_password(char *l_password, int vap_index)
         return -1;
     }
     strcpy(l_password, key_passphrase);
-    wifi_hal_dbg_print("%s:%d vap[%d] security password:%s nvram name:%s\r\n", __func__, __LINE__, vap_index, l_password, nvram_name);
     return 0;
 }
 
@@ -168,7 +167,6 @@ int platform_get_radius_key_default(char *radius_key)
     }
     else {
         strcpy(radius_key,key);
-        wifi_hal_dbg_print("%s:%d::nvram name %s and radius_key %s\n",__func__, __LINE__, nvram_name,radius_key);
     }
         return 0;
 }
