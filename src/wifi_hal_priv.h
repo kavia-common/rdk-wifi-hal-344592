@@ -79,6 +79,8 @@ switch to use nl80211_copy.h because 'linux/nl80211.h' from linux header does no
 #include "driver_nl80211.h"
 #include "hw_features.h"
 
+#include <sys/prctl.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

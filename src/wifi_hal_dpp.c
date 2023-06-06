@@ -44,6 +44,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <pthread.h>
+#include <sys/prctl.h>
 #include <openssl/bn.h>
 #include <openssl/sha.h>
 #include <openssl/pem.h>
@@ -3283,6 +3284,8 @@ static void *wifi_dppTestFrameHandler(void *arg)
 	socklen_t slen;
 
     wifi_dpp_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
+
+    prctl(PR_SET_NAME,  __func__, 0, 0, 0);
 
     if ((access("/nvram/wifiDppTest", R_OK)) != 0) {
         wifi_dpp_dbg_print("%s:%d: Not a debug build exiting\n", __func__, __LINE__);

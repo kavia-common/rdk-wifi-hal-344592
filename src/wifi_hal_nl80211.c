@@ -731,6 +731,8 @@ void *nl_recv_func(void *arg)
     wifi_interface_info_t *interface;
     int eloop_timeout_ms;
 
+    prctl(PR_SET_NAME,  __func__, 0, 0, 0);
+
     while (1) {
 
         prepare_interface_fdset(priv);

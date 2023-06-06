@@ -38,6 +38,7 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <pthread.h>
+#include <sys/prctl.h>
 #include <wifi_hal_rdk_framework.h>
 #include <collection.h>
 #include <cJSON.h>
@@ -700,6 +701,8 @@ void *wifi_anqpTestFrameHandler(void *arg)
     struct sockaddr_in saddr;
     socklen_t slen;
     unsigned short port = 8889;
+
+    prctl(PR_SET_NAME,  __func__, 0, 0, 0);
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
     {
