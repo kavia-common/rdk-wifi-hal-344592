@@ -546,11 +546,12 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
         wifi_hal_error_print("%s:%d:Failed to update radio\n", __func__, __LINE__);
         goto reload_config;
     }
-
+#if !defined(_PLATFORM_RASPBERRYPI_)
     // Call Vendor HAL
     if (wifi_setRadioDfsAtBootUpEnable(index,operationParam->DfsEnabledBootup) != 0) {
         wifi_hal_dbg_print("%s:%d:Failed to Enable DFSAtBootUp on radio %d\n", __func__, __LINE__, index);
     }
+#endif    
 
 Exit:
     if ((set_radio_params_fn = get_platform_set_radio_fn()) != NULL) {

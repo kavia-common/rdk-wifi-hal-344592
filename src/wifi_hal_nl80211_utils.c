@@ -38,9 +38,22 @@
 
 wifi_interface_name_idex_map_t interface_index_map[] = {
 #ifdef RASPBERRY_PI_PORT
-    {1, 0,  "wlan1",   "brlan1",    0,   14,     "mesh_sta_2g"},
-    {2, 1,  "wlan2",   "brlan0",    0,    0,      "private_ssid_2g"},
-    {3, 2,  "wlan3",   "brlan112",  0,   12,      "mesh_backhaul_2g"},
+    {0, 0,  "wlan0",     "brlan0",    0,    0,     "private_ssid_2g"},
+    {1, 1,  "wlan1",     "brlan0",    0,    1,      "private_ssid_5g"},
+    {0, 0,  "wlan2",     "brlan1",    0,    2,      "iot_ssid_2g"},
+    {1, 1,  "wlan3",     "brlan1",    0,    3,      "iot_ssid_5g"},
+    {0, 0,  "wlan4",     "brlan2",    0,    4,      "hotspot_open_2g"},
+    {1, 1,  "wlan5",     "brlan3",    0,    5,      "hotspot_open_5g"},
+    {0, 0,  "wlan6",     "br1an4",    0,    6,      "lnf_psk_2g"},
+    {1, 1,  "wlan7",     "brlan3",    0,    7,      "lnf_psk_5g"},
+    {0, 0,  "wlan8",     "brlan4",    0,    8,      "hotspot_secure_2g"},
+    {1, 1,  "wlan9",     "brlan5",    0,    9,      "hotspot_secure_5g"},
+    {0, 0,  "wlan10",    "br1an6",    0,    10,     "lnf_radius_2g"},
+    {1, 1,  "wlan11",    "br1an6",    0,    11,     "lnf_radius_5g"},
+    {0, 0,  "wlan12",    "brlan2",    0,    12,     "mesh_backhaul_2g"},
+    {1, 1,  "wlan13",    "brlan3",    0,    13,     "mesh_backhaul_5g"},
+    {0, 0,  "wlan14",    "brlan2",    0,    14,     "mesh_sta_2g"},
+    {1, 1,  "wlan15",    "brlan2",    0,    15,     "mesh_sta_5g"},
 #endif
 
 #ifdef TCXB7_PORT // for Broadcom based platforms
@@ -195,6 +208,10 @@ static radio_interface_mapping_t l_radio_interface_map[] = {
     { 0, 1, "radio2", "wlan2"},
 #endif
 
+#ifdef RASPBERRY_PI_PORT
+    { 0, 0, "radio1", "wlan0"},
+    { 1, 1, "radio2", "wlan1"},
+#endif
 };
 
 const wifi_driver_info_t  driver_info = {

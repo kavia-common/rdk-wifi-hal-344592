@@ -6384,7 +6384,7 @@ int wifi_drv_sta_disassoc(void *priv, const u8 *own_addr, const u8 *addr, u16 re
 
     wifi_hal_dbg_print("%s:%d: Enter %s %d\n", __func__, __LINE__, to_mac_str(addr, mac_str), reason);
 
-#if 0
+#if defined(_PLATFORM_RASPBERRYPI_)
     wifi_device_callbacks_t *callbacks;
 
     callbacks = get_hal_device_callbacks();

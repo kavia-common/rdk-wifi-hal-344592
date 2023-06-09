@@ -41,6 +41,55 @@ int no_seq_check(struct nl_msg *msg, void *arg)
     return NL_OK;
 }
 
+#if defined(_PLATFORM_RASPBERRYPI_)
+static void nl80211_new_station_event(wifi_interface_info_t *interface, struct nlattr **tb)
+{
+    union wpa_event_data event;
+    unsigned char *ies = NULL;
+    size_t ies_len = 0;
+    struct nlattr *attr;
+    mac_address_t mac;
+    mac_addr_str_t mac_str;
+    if ((attr = tb[NL80211_ATTR_MAC]) == NULL) {
+        wifi_hal_error_print("%s:%d: mac attribute not present ... dropping\n", __func__, __LINE__);
+        return;
+    }
+    memcpy(mac, nla_data(attr), sizeof(mac_address_t));
+    if (tb[NL80211_ATTR_IE]) {
+        ies = nla_data(tb[NL80211_ATTR_IE]);
+        ies_len = nla_len(tb[NL80211_ATTR_IE]);
+    } else {
+        wifi_hal_error_print("%s:%d:ie attribute not present\n", __func__, __LINE__);
+        return;
+    }
+    wifi_hal_error_print("%s:%d: New station:%s, sending event: EVENT_ASSOC\n", __func__, __LINE__,
+        to_mac_str(mac, mac_str));
+    os_memset(&event, 0, sizeof(event));
+    event.assoc_info.reassoc = 0;
+    event.assoc_info.req_ies = ies;
+    event.assoc_info.req_ies_len = ies_len;
+    event.assoc_info.addr = mac;
+    wpa_supplicant_event(&interface->u.ap.hapd, EVENT_ASSOC, &event);
+}
+
+static void nl80211_del_station_event(wifi_interface_info_t *interface, struct nlattr **tb)
+{
+    union wpa_event_data event;
+    struct nlattr *attr;
+    mac_address_t mac;
+    mac_addr_str_t mac_str;
+    if ((attr = tb[NL80211_ATTR_MAC]) == NULL) {
+        wifi_hal_error_print("%s:%d: mac attribute not present ... dropping\n", __func__, __LINE__);
+        return;
+    }
+    memcpy(mac, nla_data(attr), sizeof(mac_address_t));
+    wifi_hal_error_print("%s:%d: DEL station:%s, sending event: EVENT_DISASSOC\n", __func__, __LINE__,
+        to_mac_str(mac, mac_str));
+    os_memset(&event, 0, sizeof(event));
+    event.disassoc_info.addr = mac;
+    wpa_supplicant_event(&interface->u.ap.hapd, EVENT_DISASSOC, &event);
+}
+#endif
 static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, struct nlattr **tb)
 {
     struct nlattr *frame, *addr, *cookie, *ack, *attr;
@@ -919,6 +968,15 @@ static void nl80211_vendor_event(wifi_interface_info_t *interface,
 static void do_process_drv_event(wifi_interface_info_t *interface, int cmd, struct nlattr **tb)
 {
     switch (cmd) {
+#if defined(_PLATFORM_RASPBERRYPI_) 
+    case NL80211_CMD_NEW_STATION:
+        nl80211_new_station_event(interface, tb);
+        break;
+
+    case NL80211_CMD_DEL_STATION:
+        nl80211_del_station_event(interface, tb);
+        break;
+#endif
     case NL80211_CMD_FRAME_TX_STATUS:
         nl80211_frame_tx_status_event(interface, tb);
         break;
