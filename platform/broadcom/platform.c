@@ -1,7 +1,11 @@
 #include <stddef.h>
 #include "wifi_hal.h"
 #include "wifi_hal_priv.h"
+#if defined(WLDM_21_2)
 #include "wlcsm_lib_api.h"
+#else
+#include "nvram_api.h"
+#endif // defined(WLDM_21_2)
 #if defined (ENABLED_EDPD) && defined(_SR213_PRODUCT_REQ_)
 #include <fcntl.h>
 #include <stdbool.h>
@@ -146,12 +150,20 @@ void set_decimal_nvram_param(char *param_name, unsigned int value)
     memset(temp_buff, 0 ,sizeof(temp_buff));
 
     snprintf(temp_buff, sizeof(temp_buff), "%d", value);
+#if defined(WLDM_21_2)
     wlcsm_nvram_set(param_name, temp_buff);
+#else
+    nvram_set(param_name, temp_buff);
+#endif // defined(WLDM_21_2)
 }
 
 void set_string_nvram_param(char *param_name, char *value)
 {
+#if defined(WLDM_21_2)
     wlcsm_nvram_set(param_name, value);
+#else
+    nvram_set(param_name, value);
+#endif // defined(WLDM_21_2)
 }
 
 int platform_pre_init()
@@ -162,7 +174,7 @@ int platform_pre_init()
     system("sysevent set multinet-up 14");
     wifi_hal_info_print("sysevent sent to start mesh bridges\r\n");
 
-//    wlcsm_nvram_set("wl0_bw_cap", "3");
+//    nvram_set("wl0_bw_cap", "3");
     /* registering the dummy callbacks to receive the events in plume */
     wifi_newApAssociatedDevice_callback_register(sta_associated);
     wifi_apDeAuthEvent_callback_register(sta_deauthenticated);
@@ -307,7 +319,11 @@ int platform_post_init(wifi_vap_info_map_t *vap_map)
         wifi_hal_info_print("%s: system acsd2 failed\n", __FUNCTION__);
     }
 
+#if defined(WLDM_21_2)
     wlcsm_nvram_set("acsd2_started", "1");
+#else
+    nvram_set("acsd2_started", "1");
+#endif // defined(WLDM_21_2)
 
     wifi_hal_info_print("%s:%d: acsd2_started\r\n", __func__, __LINE__);
 
@@ -348,7 +364,11 @@ int nvram_get_vap_enable_status(bool *vap_enable, int vap_index)
     get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
 
     snprintf(nvram_name, sizeof(nvram_name), "%s_vap_enabled", interface_name);
+#if defined(WLDM_21_2)
     char *enable = wlcsm_nvram_get(nvram_name);
+#else
+    char *enable = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
 
     *vap_enable = (!enable || *enable == '0') ? FALSE : TRUE;
     wifi_hal_dbg_print("%s:%d: vap enable status:%d for vap index:%d \r\n", __func__, __LINE__, *vap_enable, vap_index);
@@ -366,13 +386,21 @@ int nvram_get_current_security_mode(wifi_security_modes_t *security_mode,int vap
     memset(interface_name, 0, sizeof(interface_name));
     get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
     snprintf(nvram_name, sizeof(nvram_name), "%s_akm", interface_name);
+#if defined(WLDM_21_2)
     sec_mode_str = wlcsm_nvram_get(nvram_name);
+#else
+    sec_mode_str = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
     if (sec_mode_str == NULL) {
         wifi_hal_error_print("%s:%d nvram sec_mode value is NULL\r\n", __func__, __LINE__);
         return -1;
     }
     snprintf(nvram_name, sizeof(nvram_name), "%s_mfp", interface_name);
+#if defined(WLDM_21_2)
     mfp_str = wlcsm_nvram_get(nvram_name);
+#else
+    mfp_str = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
     if (mfp_str == NULL) {
         wifi_hal_error_print("%s:%d nvram mfp value is NULL\r\n", __func__, __LINE__);
         return -1;
@@ -396,7 +424,12 @@ int nvram_get_default_password(char *l_password, int vap_index)
     memset(interface_name, 0, sizeof(interface_name));
     get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
     snprintf(nvram_name, sizeof(nvram_name), "%s_wpa_psk", interface_name);
+#if defined(WLDM_21_2)
     key_passphrase = wlcsm_nvram_get(nvram_name);
+#else
+    key_passphrase = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
+
     if (key_passphrase == NULL) {
         wifi_hal_error_print("%s:%d nvram key_passphrase value is NULL\r\n", __func__, __LINE__);
         return -1;
@@ -443,7 +476,11 @@ int platform_get_radius_key_default(char *radius_key)
     char *key;
 
     snprintf(nvram_name, sizeof(nvram_name), "default_radius_key");
+#if defined(WLDM_21_2)
     key = wlcsm_nvram_get(nvram_name);
+#else
+    key = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
     if (key == NULL) {
         wifi_hal_error_print("%s:%d default_radius_key value is NULL\r\n", __func__, __LINE__);
         return -1;
@@ -597,7 +634,11 @@ int nvram_get_current_ssid(char *l_ssid, int vap_index)
     memset(interface_name, 0, sizeof(interface_name));
     get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
     snprintf(nvram_name, sizeof(nvram_name), "%s_ssid", interface_name);
+#if defined(WLDM_21_2)
     ssid = wlcsm_nvram_get(nvram_name);
+#else
+    ssid = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
     if (ssid == NULL) {
         wifi_hal_error_print("%s:%d nvram ssid value is NULL\r\n", __func__, __LINE__);
         return -1;
@@ -972,15 +1013,31 @@ int platform_pre_create_vap(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         snprintf(param, sizeof(param), "%s_bss_enabled", interface_name);
         if (vap->vap_mode == wifi_vap_mode_ap) {
             if (vap->u.bss_info.enabled) {
+#if defined(WLDM_21_2)
                 wlcsm_nvram_set(param, "1");
+#else
+                nvram_set(param, "1");
+#endif // defined(WLDM_21_2)
             }else {
+#if defined(WLDM_21_2)
                 wlcsm_nvram_set(param, "0");
+#else
+                nvram_set(param, "0");
+#endif // defined(WLDM_21_2)
             }
         }else if (vap->vap_mode == wifi_vap_mode_sta) {
             if (vap->u.sta_info.enabled) {
+#if defined(WLDM_21_2)
                 wlcsm_nvram_set(param, "1");
+#else
+                nvram_set(param, "1");
+#endif // defined(WLDM_21_2)
             } else {
+#if defined(WLDM_21_2)
                 wlcsm_nvram_set(param, "0");
+#else
+                nvram_set(param, "0");
+#endif // defined(WLDM_21_2)
             }
         }
     }
@@ -1057,7 +1114,11 @@ int nvram_get_mgmt_frame_power_control(int vap_index, int* output_dbm)
     memset(interface_name, 0, sizeof(interface_name));
     get_ccspwifiagent_interface_name_from_vap_index(vap_index, interface_name);
     snprintf(nvram_name, sizeof(nvram_name), "%s_bcnprs_txpwr_offset", interface_name);
+#if defined(WLDM_21_2)
     str_value = wlcsm_nvram_get(nvram_name);
+#else
+    str_value = nvram_get(nvram_name);
+#endif // defined(WLDM_21_2)
     if (str_value == NULL) {
         wifi_hal_error_print("%s:%d nvram %s value is NULL\r\n", __func__, __LINE__, nvram_name);
         return RETURN_ERR;
