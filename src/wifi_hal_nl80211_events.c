@@ -950,7 +950,7 @@ static void nl80211_vendor_event(wifi_interface_info_t *interface,
     if (tb[NL80211_ATTR_VENDOR_DATA]) {
         data = nla_data(tb[NL80211_ATTR_VENDOR_DATA]);
         len = nla_len(tb[NL80211_ATTR_VENDOR_DATA]);
-        wifi_hal_dbg_print("%s:%d: nl80211: len %d data %p\n", __func__, __LINE__, len, data);
+        wifi_hal_dbg_print("%s:%d: nl80211: len %zu data %p\n", __func__, __LINE__, len, data);
     }
 
     switch (vendor_id) {

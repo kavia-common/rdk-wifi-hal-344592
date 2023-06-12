@@ -1683,7 +1683,7 @@ static int wpa_sm_sta_ether_send(void *ctx, const u8 *dest, u16 proto, const u8 
         wifi_hal_error_print("%s:%d: error:%s\n", __func__, __LINE__, strerror(errno));
     } else {
         //my_print_hex_dump(len + sizeof(struct ieee8023_hdr), buff);
-        wifi_hal_info_print("%s:%d: send eapol key to:%s success, length of payload:%d\n", __func__, __LINE__, 
+        wifi_hal_info_print("%s:%d: send eapol key to:%s success, length of payload:%zu\n", __func__, __LINE__, 
             to_mac_str(dest, bssid_str), len); 
     }
 
@@ -2060,7 +2060,7 @@ void start_bss(wifi_interface_info_t *interface)
     //iconf = hapd->iconf;
     //iface = hapd->iface;
 
-    wifi_hal_dbg_print("%s:%d:ssid info ssid len:%d\n", __func__, __LINE__, conf->ssid.ssid_len);
+    wifi_hal_dbg_print("%s:%d:ssid info ssid len:%zu\n", __func__, __LINE__, conf->ssid.ssid_len);
     //my_print_hex_dump(conf->ssid.ssid_len, conf->ssid.ssid);
     hostapd_setup_bss(hapd, 1);
 
