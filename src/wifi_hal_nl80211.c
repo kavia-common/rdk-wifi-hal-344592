@@ -537,6 +537,43 @@ static void fill_steering_event_general(wifi_steering_event_t *event, wifi_steer
     event->timestamp_ms = time(NULL);
 }
 
+static bool is_probe_req_to_our_ssid(struct ieee80211_mgmt *mgmt, unsigned int len,
+    wifi_interface_info_t *interface)
+{
+    unsigned char *ie;
+    unsigned int ie_len, ssid_len;
+    char *ssid;
+
+    if (memcmp(mgmt->da, interface->mac, sizeof(mac_address_t)) == 0) {
+        return true;
+    }
+
+    if (len < IEEE80211_HDRLEN) {
+        return false;
+    }
+
+    ie = ((unsigned char *)mgmt) + IEEE80211_HDRLEN;
+    ie_len = len - IEEE80211_HDRLEN;
+
+    ie = get_ie(ie, ie_len, WLAN_EID_SSID);
+    if (ie == NULL) {
+        return false;
+    }
+
+    ssid_len = ie[1];
+    if (ssid_len == 0 || ssid_len > SSID_MAX_LEN) {
+        return false;
+    }
+
+    if (ssid_len != interface->u.ap.hapd.conf->ssid.ssid_len) {
+        return false;
+    }
+
+    ssid = ie + 2;
+
+    return strncmp(ssid, interface->u.ap.hapd.conf->ssid.ssid, ssid_len) == 0;
+}
+
 int process_mgmt_frame(struct nl_msg *msg, void *arg)
 {
     wifi_interface_info_t *interface;
@@ -680,7 +717,8 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         //wifi_hal_dbg_print("%s:%d: Received probe req frame from: %s\n", __func__, __LINE__,
         //to_mac_str(sta, sta_mac_str));
 
-        if (callbacks->steering_event_callback != 0) {
+        if (callbacks->steering_event_callback != 0 &&
+            is_probe_req_to_our_ssid(mgmt, len, interface)) {
             fill_steering_event_general(&steering_evt, WIFI_STEERING_EVENT_PROBE_REQ, vap);
             memcpy(steering_evt.data.probeReq.client_mac, sta, sizeof(mac_address_t));
             steering_evt.data.probeReq.rssi = sig_dbm;
@@ -794,7 +832,8 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         return NL_SKIP;
     }
 
-    if (callbacks->mgmt_frame_rx_callback) {
+    if (callbacks->mgmt_frame_rx_callback &&
+        (stype != WLAN_FC_STYPE_PROBE_REQ || is_probe_req_to_our_ssid(mgmt, len, interface))) {
             mgmt_frame.ap_index = vap->vap_index;
             memcpy(mgmt_frame.sta_mac, sta, sizeof(mac_address_t));
             mgmt_frame.type = mgmt_type;
