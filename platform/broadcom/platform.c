@@ -737,13 +737,12 @@ int platform_set_radio(wifi_radio_index_t index, wifi_radio_operationParam_t *op
 int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
 {
     wifi_hal_dbg_print("%s:%d: Enter radio index:%d\n", __func__, __LINE__, r_index);
-    int  index = 0;
+    int  index = 0, l_wps_state = 0;
     char temp_buff[256];
     char param_name[NVRAM_NAME_SIZE];
     char interface_name[8];
     wifi_radio_info_t *radio;
     char das_ipaddr[45];
-    wifi_interface_info_t *interface;
     memset(temp_buff, 0 ,sizeof(temp_buff));
     memset(param_name, 0 ,sizeof(param_name));
     memset(interface_name, 0, sizeof(interface_name));
@@ -755,8 +754,6 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
             wifi_hal_error_print("%s:%d:Could not find radio index:%d\n", __func__, __LINE__, r_index);
             return RETURN_ERR;
         }
-
-        interface = get_interface_by_vap_index(map->vap_array[index].vap_index);
 
         memset(interface_name, 0, sizeof(interface_name));
         get_ccspwifiagent_interface_name_from_vap_index(map->vap_array[index].vap_index, interface_name);
@@ -803,7 +800,7 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.enabled);
 
             prepare_param_name(param_name, interface_name, "_closed");
-            set_decimal_nvram_param(param_name, interface->u.ap.conf.ignore_broadcast_ssid);
+            set_decimal_nvram_param(param_name, !map->vap_array[index].u.bss_info.showSsid);
 
             prepare_param_name(param_name, interface_name, "_bss_maxassoc");
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.bssMaxSta);
@@ -828,8 +825,16 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
             wps_enum_to_string(map->vap_array[index].u.bss_info.wps.methods, temp_buff, sizeof(temp_buff));
             set_string_nvram_param(param_name, temp_buff);
 
+            l_wps_state = map->vap_array[index].u.bss_info.wps.enable ? WPS_STATE_CONFIGURED : 0;
+            /* WPS is not supported in 6G */
+            if (radio->oper_param.band == WIFI_FREQUENCY_6_BAND) {
+                l_wps_state = 0;
+            }
+            if (l_wps_state && (!map->vap_array[index].u.bss_info.showSsid)) {
+                l_wps_state = 0;
+            }
             prepare_param_name(param_name, interface_name, "_wps_config_state");
-            set_decimal_nvram_param(param_name, interface->u.ap.conf.wps_state);
+            set_decimal_nvram_param(param_name, l_wps_state);
 
             if ((get_security_mode_support_radius(map->vap_array[index].u.bss_info.security.mode))|| is_wifi_hal_vap_hotspot_open(map->vap_array[index].vap_index)) {
 
