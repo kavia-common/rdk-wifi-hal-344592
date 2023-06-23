@@ -7758,6 +7758,7 @@ int nl80211_set_acl(wifi_interface_info_t *interface)
     int ret;
     acl_map_t *acl_map = NULL;
     wifi_vap_info_t *vap;
+    mac_address_t null_mac = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
     vap = &interface->vap_info;
 
@@ -7796,16 +7797,17 @@ int nl80211_set_acl(wifi_interface_info_t *interface)
                 i++;
             }
         }
-
+        if (i == 0) {
+            if (nla_put(msg, i, ETH_ALEN, null_mac)) {
+                wifi_hal_dbg_print("nl80211: Failed to add MAC to ACL list\n");
+                return -ENOMEM;
+            }
+        }
         nla_nest_end(msg, acl);
 
         wifi_hal_dbg_print("%s:%d: ACL count: %d ACL mode: %s \n", __func__, __LINE__, i,
             vap->u.bss_info.mac_filter_mode == wifi_mac_filter_mode_black_list ? "Blacklist" : "Whitelist");
 
-        /* Empty list */
-        if (i == 0) {
-            nla_put_u32(msg, NL80211_ATTR_MAC_ADDRS, 0);
-        }
     } else {
         nla_put_u32(msg, NL80211_ATTR_ACL_POLICY, NL80211_ACL_POLICY_ACCEPT_UNLESS_LISTED);
         nla_put_u32(msg, NL80211_ATTR_MAC_ADDRS, 0);
