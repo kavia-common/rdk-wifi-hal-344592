@@ -4331,7 +4331,6 @@ int nl80211_init_primary_interfaces()
             wifi_hal_error_print("%s:%d: Error updating dev:%d no primary interfaces exist\n", __func__, __LINE__, radio->index);
             return -1;
         }
-        nl80211_interface_enable(primary_interface->name, true);
 
         interface = get_private_vap_interface(radio);
         if (interface == NULL) {
@@ -4351,6 +4350,7 @@ int nl80211_init_primary_interfaces()
                 __func__, __LINE__, interface->name, radio->index, strerror(-ret));
             return -1;
         }
+        nl80211_interface_enable(primary_interface->name, true);
     }
 
     return 0;
