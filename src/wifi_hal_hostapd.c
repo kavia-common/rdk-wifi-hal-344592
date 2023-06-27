@@ -1079,6 +1079,14 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     default:
         wifi_hal_error_print("%s:%d: Unknown band: %d\n", __func__, __LINE__,
             radio->oper_param.band);
+        if(preassoc_supp_rates) {
+          os_free(preassoc_supp_rates);
+          preassoc_supp_rates = NULL;
+        }
+        if(preassoc_basic_rates) {
+          os_free(preassoc_basic_rates);
+          preassoc_basic_rates = NULL;
+        }
         return RETURN_ERR;
     }
 
