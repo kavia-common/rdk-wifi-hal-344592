@@ -1198,7 +1198,7 @@ int update_hostap_iface(wifi_interface_info_t *interface)
 
 #ifdef CMXB7_PORT
     iface->drv_flags = radio->driver_data.capa.flags;
-    iface->drv_flags |= WPA_DRIVER_FLAGS_INACTIVITY_TIMER;
+    //iface->drv_flags |= WPA_DRIVER_FLAGS_INACTIVITY_TIMER;
     iface->drv_flags |= WPA_DRIVER_FLAGS_EAPOL_TX_STATUS;
     iface->drv_flags |= WPA_DRIVER_FLAGS_AP_MLME;
     iface->drv_flags |= WPA_DRIVER_FLAGS_AP_CSA;

@@ -6540,10 +6540,65 @@ int wifi_drv_sta_clear_stats(void *priv, const u8 *addr)
     return 0;
 }
 
+int get_sta_inactive_handler (struct nl_msg *msg, void *arg)
+{
+    struct nlattr *tb[NL80211_ATTR_MAX + 1];
+    struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
+    struct hostap_sta_driver_data *data = arg;
+    struct nlattr *stats[NL80211_STA_INFO_MAX + 1];
+    static struct nla_policy stats_policy[NL80211_STA_INFO_MAX + 1] = {
+        [NL80211_STA_INFO_INACTIVE_TIME] = { .type = NLA_U32 },
+    };
+
+    nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
+    if (!tb[NL80211_ATTR_STA_INFO]) {
+        wifi_hal_dbg_print("%s:%d: sta stats missing!\n", __func__, __LINE__);
+        return NL_SKIP;
+    }
+    if (nla_parse_nested(stats, NL80211_STA_INFO_MAX, tb[NL80211_ATTR_STA_INFO], stats_policy)) {
+        wifi_hal_dbg_print("%s:%d: failed to parse nested attributes!\n", __func__, __LINE__);
+        return NL_SKIP;
+    }
+    if (stats[NL80211_STA_INFO_INACTIVE_TIME]) {
+        data->inactive_msec = nla_get_u32(stats[NL80211_STA_INFO_INACTIVE_TIME]);
+        wifi_hal_dbg_print("%s:%d: Inactive time :%ld\n", __func__, __LINE__,data->inactive_msec);
+    }
+    return NL_SKIP;
+}
+
+
 int wifi_drv_get_inact_sec(void *priv, const u8 *addr)
 {
-    wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
-    return 0;
+    struct hostap_sta_driver_data data;
+    struct nl_msg *msg;
+    wifi_interface_info_t *interface;
+    int ret = 0;
+    mac_addr_str_t mac_str;
+
+    interface = (wifi_interface_info_t *)priv;
+    os_memset(&data, 0, sizeof(data));
+    data.inactive_msec = (unsigned long) -1;
+
+    if ((msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, interface, 0,
+                                    NL80211_CMD_GET_STATION)) == NULL) {
+        wifi_hal_error_print("%s:%d: Failed to create message\n", __func__, __LINE__);
+        return -1;
+    }
+    nla_put(msg, NL80211_ATTR_MAC, ETH_ALEN, addr);
+
+    ret = send_and_recv(msg, get_sta_inactive_handler, &data, NULL, NULL);
+    if (ret) {
+        wifi_hal_error_print("nl80211: Station get failed: ret=%d (%s)\n", ret, strerror(-ret));
+    }
+    if (ret == -ENOENT){
+        return -ENOENT;
+    }
+    if (ret || data.inactive_msec == (unsigned long) -1) {
+        return -1;
+    }
+
+    wifi_hal_error_print("Inactivity time for client %s:%ld\n", to_mac_str(addr, mac_str), (data.inactive_msec / 1000));
+    return data.inactive_msec / 1000;
 }
 
 int wifi_drv_flush(void *priv)
