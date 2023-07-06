@@ -942,7 +942,27 @@ INT wifi_setApIsolationEnable(INT apIndex, BOOL enable)
 //--------------------------------------------------------------------------------------------------
 INT wifi_setApManagementFramePowerControl(INT apIndex, INT dBm)
 {
-    return RETURN_ERR;
+    wifi_interface_info_t *interface = NULL;
+    int res = 0;
+
+    if ((interface = get_interface_by_vap_index(apIndex)) == NULL) {
+        wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
+
+#if HOSTAPD_VERSION >= 210 //2.10
+    res = wifi_drv_vendor_cmd(interface, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_SET_MGMT_FRAME_PWR_CTRL,
+                                (u8*) &dBm, sizeof(dBm), NESTED_ATTR_NOT_USED, NULL);
+#else
+    res = wifi_drv_vendor_cmd(interface, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_SET_MGMT_FRAME_PWR_CTRL,
+                               (u8*) &dBm, sizeof(dBm), NULL);
+#endif
+
+    if (res) {
+        wifi_hal_dbg_print("%s:%d: nl80211: sending _MGMT_FRAME_PWR_CTRL failed: %i "
+            "(%s)\n",  __func__, __LINE__, res, strerror(res));
+    }
+    return res;
 }
 
 //--------------------------------------------------------------------------------------------------
