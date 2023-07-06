@@ -4430,6 +4430,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
     struct csa_settings csa_settings;
     int sec_chan_offset, freq, freq1, bandwidth;
     char country[8];
+    int ret;
 
     param = &radio->oper_param;
     get_coutry_str_from_code(param->countryCode, country);
@@ -4509,7 +4510,11 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
                 break;
             }
 
-            hostapd_switch_channel(&interface->u.ap.hapd, &csa_settings);
+            ret = hostapd_switch_channel(&interface->u.ap.hapd, &csa_settings);
+            if (ret != 0) {
+                wifi_hal_error_print("%s:%d: failed to switch channel, ret=%d\n", __func__,
+                    __LINE__, ret);
+            }
 #ifndef CMXB7_PORT
             break;
 #endif
@@ -5782,7 +5787,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
 
     interface = (wifi_interface_info_t *)priv;
 
-    wifi_hal_dbg_print( "%s:%d: Channel switch request (cs_count=%u block_tx=%u freq=%d width=%d cf1=%d cf2=%d)\n",
+    wifi_hal_info_print("%s:%d: channel switch request (cs_count=%u block_tx=%u freq=%d width=%d cf1=%d cf2=%d)\n",
         __func__, __LINE__, settings->cs_count, settings->block_tx, settings->freq_params.freq,
         settings->freq_params.bandwidth, settings->freq_params.center_freq1, settings->freq_params.center_freq2);
 
@@ -5800,6 +5805,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
     }
 
     if (!settings->beacon_csa.tail) {
+        wifi_hal_error_print("%s:%d: beacon_csa.tail is null", __func__, __LINE__);
         return -1;
     }
 
@@ -5807,45 +5813,84 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
         u16 csa_c_off_bcn = settings->counter_offset_beacon[i];
         u16 csa_c_off_presp = settings->counter_offset_presp[i];
 
-        if ((settings->beacon_csa.tail_len <= csa_c_off_bcn) || (settings->beacon_csa.tail[csa_c_off_bcn] !=
-            settings->cs_count)) {
+        if (settings->beacon_csa.tail_len <= csa_c_off_bcn) {
+            wifi_hal_error_print("%s:%d: beacon_csa.tail_len=%d csa_c_off_bcn=%d\n", __func__,
+                __LINE__, settings->beacon_csa.tail_len, csa_c_off_bcn);
             return -1;
         }
 
-        if (settings->beacon_csa.probe_resp && ((settings->beacon_csa.probe_resp_len <=
-            csa_c_off_presp) || (settings->beacon_csa.probe_resp[csa_c_off_presp] != settings->cs_count))) {
+        if (settings->beacon_csa.tail[csa_c_off_bcn] != settings->cs_count) {
+            wifi_hal_error_print("%s:%d: beacon_csa.tail[csa_c_off_bcn]=%d settings->cs_count=%d\n",
+                __func__, __LINE__, settings->beacon_csa.tail[csa_c_off_bcn], settings->cs_count);
             return -1;
+        }
+
+        if (settings->beacon_csa.probe_resp) {
+            if (settings->beacon_csa.probe_resp_len <= csa_c_off_presp) {
+                wifi_hal_error_print("%s:%d: beacon_csa.probe_resp_len=%d csa_c_off_presp=%d\n",
+                    __func__, __LINE__, settings->beacon_csa.probe_resp_len, csa_c_off_presp);
+                return -1;
+            }
+
+            if (settings->beacon_csa.probe_resp[csa_c_off_presp] != settings->cs_count) {
+                wifi_hal_error_print("%s:%d: beacon_csa.probe_resp[csa_c_off_presp]=%d "
+                    "settings->cs_count=%d\n", __func__, __LINE__,
+                    settings->beacon_csa.probe_resp[csa_c_off_presp], settings->cs_count);
+                return -1;
+            }
         }
     }
 
-    if (!(msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, interface, 0, NL80211_CMD_CHANNEL_SWITCH)) ||
-        nla_put_u32(msg, NL80211_ATTR_CH_SWITCH_COUNT, settings->cs_count) ||
-        (ret = nl80211_put_freq_params(msg, &settings->freq_params)) ||
-        (settings->block_tx && nla_put_flag(msg, NL80211_ATTR_CH_SWITCH_BLOCK_TX))) {
+    if (!(msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, interface, 0,
+        NL80211_CMD_CHANNEL_SWITCH))) {
+        wifi_hal_error_print("%s:%d: failed to create CMD_CHANNEL_SWITCH\n", __func__, __LINE__);
+        goto error;
+    }
+
+    if (nla_put_u32(msg, NL80211_ATTR_CH_SWITCH_COUNT, settings->cs_count)) {
+        wifi_hal_error_print("%s:%d: failed to put CH_SWITCH_COUNT\n", __func__, __LINE__);
+        goto error;
+    }
+
+    if ((ret = nl80211_put_freq_params(msg, &settings->freq_params))) {
+        wifi_hal_error_print("%s:%d: failed to put freq params, ret=%d\n", __func__, __LINE__, ret);
+        goto error;
+    }
+
+    if (settings->block_tx && nla_put_flag(msg, NL80211_ATTR_CH_SWITCH_BLOCK_TX)) {
+        wifi_hal_error_print("%s:%d: failed to put CH_SWITCH_BLOCK_TX\n", __func__, __LINE__);
         goto error;
     }
 
     /* beacon_after params */
     ret = set_beacon_data(msg, &settings->beacon_after);
     if (ret) {
+        wifi_hal_error_print("%s:%d: failed to set beacon data, ret=%d\n", __func__, __LINE__, ret);
         goto error;
     }
 
     /* beacon_csa params */
     beacon_csa = nla_nest_start(msg, NL80211_ATTR_CSA_IES);
     if (!beacon_csa) {
+        wifi_hal_error_print("%s:%d: failed to create ATTR_CSA_IES\n", __func__, __LINE__);
         goto fail;
     }
 
     ret = set_beacon_data(msg, &settings->beacon_csa);
     if (ret) {
+        wifi_hal_error_print("%s:%d: failed to set beacon data, ret=%d\n", __func__, __LINE__, ret);
         goto error;
     }
 
     if (nla_put(msg, NL80211_ATTR_CSA_C_OFF_BEACON, csa_off_len * sizeof(u16),
-        settings->counter_offset_beacon) || (settings->beacon_csa.probe_resp &&
-            nla_put(msg, NL80211_ATTR_CSA_C_OFF_PRESP, csa_off_len * sizeof(u16),
-            settings->counter_offset_presp))) {
+        settings->counter_offset_beacon)) {
+        wifi_hal_error_print("%s:%d: failed to put CSA_C_OFF_BEACON\n", __func__, __LINE__);
+        goto fail;
+    }
+
+    if (settings->beacon_csa.probe_resp && nla_put(msg, NL80211_ATTR_CSA_C_OFF_PRESP,
+        csa_off_len * sizeof(u16), settings->counter_offset_presp)) {
+        wifi_hal_error_print("%s:%d: failed to put CSA_C_OFF_PRESP\n", __func__, __LINE__);
         goto fail;
     }
 
