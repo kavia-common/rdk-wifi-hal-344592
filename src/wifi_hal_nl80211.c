@@ -619,6 +619,36 @@ static bool is_probe_req_to_our_ssid(struct ieee80211_mgmt *mgmt, unsigned int l
     return ret;
 }
 
+static void remove_station_from_other_interfaces(wifi_interface_info_t *interface, mac_address_t sta)
+{
+    wifi_radio_info_t *radio;
+    wifi_interface_info_t *iter;
+    mac_addr_str_t sta_mac_str;
+
+    radio = get_radio_by_phy_index(interface->phy_index);
+    if (radio == NULL) {
+        wifi_hal_error_print("%s:%d: radio with index %d is not found for interface %s (ifindex %d)\n", __func__, __LINE__,
+                           interface->phy_index, interface->name, interface->index);
+        return;
+    }
+
+    to_mac_str(sta, sta_mac_str);
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
+    iter = hash_map_get_first(radio->interface_map);
+    while (iter != NULL) {
+        if (iter->index != interface->index) {
+            struct sta_info *station = ap_get_sta(&iter->u.ap.hapd, sta);
+            if (station) {
+                wifi_hal_dbg_print("%s:%d: {phy %s (index %d), interface %s (ifindex %d)} stale sta %s on interface %s (ifindex %d)\n", __func__, __LINE__,
+                                   radio->name, radio->index, interface->name, interface->index, sta_mac_str, iter->name, iter->index);
+                ap_free_sta(&iter->u.ap.hapd, station);
+            }
+        }
+        iter = hash_map_get_next(radio->interface_map, iter);
+    }
+    pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+}
+
 int process_mgmt_frame(struct nl_msg *msg, void *arg)
 {
     wifi_interface_info_t *interface;
@@ -736,6 +766,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         mgmt_type = WIFI_MGMT_FRAME_TYPE_AUTH;
         wifi_hal_dbg_print("%s:%d: Received auth frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
+        remove_station_from_other_interfaces(interface, sta);
         break;
 
     case WLAN_FC_STYPE_ASSOC_REQ:
@@ -757,12 +788,14 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
             callbacks->steering_event_callback(0, &steering_evt);
         }
 
+        remove_station_from_other_interfaces(interface, sta);
         break;
 
     case WLAN_FC_STYPE_REASSOC_REQ:
         mgmt_type = WIFI_MGMT_FRAME_TYPE_REASSOC_REQ;
         wifi_hal_dbg_print("%s:%d: Received reassoc frame from: %s\n", __func__, __LINE__,
                            to_mac_str(sta, sta_mac_str));
+        remove_station_from_other_interfaces(interface, sta);
         break;
 
     case WLAN_FC_STYPE_ASSOC_RESP:
