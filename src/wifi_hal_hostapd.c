@@ -1184,6 +1184,10 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     if (g_wifi_hal.platform_flags & PLATFORM_FLAGS_PROBE_RESP_OFFLOAD) {
         iface->drv_flags |= WPA_DRIVER_FLAGS_PROBE_RESP_OFFLOAD;
     }
+
+    if (iface->current_mode->vht_capab & VHT_CAP_SUPP_CHAN_WIDTH_160MHZ) {
+        iface->conf->vht_capab |= VHT_CAP_SUPP_CHAN_WIDTH_160MHZ;
+    }
 #endif
 
     return RETURN_OK;

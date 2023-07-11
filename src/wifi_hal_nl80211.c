@@ -4429,6 +4429,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
     wifi_radio_operationParam_t *param;
     struct csa_settings csa_settings;
     int sec_chan_offset, freq, freq1, bandwidth;
+    u8 seg0;
     char country[8];
     int ret;
 
@@ -4465,6 +4466,8 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
         break;
     }
 
+    ieee80211_freq_to_chan(freq1, &seg0);
+
     /* Setup CSA request */
     os_memset(&csa_settings, 0, sizeof(csa_settings));
     csa_settings.cs_count = 5;
@@ -4489,7 +4492,7 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
         if (interface->bss_started) {
             wifi_hal_dbg_print("Switch channel on %s\n", interface->name);
             hostapd_set_oper_centr_freq_seg1_idx(interface->u.ap.hapd.iconf, 0);
-            hostapd_set_oper_centr_freq_seg0_idx(interface->u.ap.hapd.iconf, 0);
+            hostapd_set_oper_centr_freq_seg0_idx(interface->u.ap.hapd.iconf, seg0);
 
             switch (param->channelWidth) {
             case WIFI_CHANNELBANDWIDTH_20MHZ:
