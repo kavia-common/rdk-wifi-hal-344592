@@ -4574,6 +4574,11 @@ int nl80211_switch_channel(wifi_radio_info_t *radio)
         break;
     }
 
+    if (freq1 == -1) {
+        wifi_hal_error_print("%s:%d - No center frequency found\n", __func__, __LINE__);
+        return -1;
+    }
+
     ieee80211_freq_to_chan(freq1, &seg0);
 
     /* Setup CSA request */
@@ -4675,7 +4680,9 @@ int nl80211_update_wiphy(wifi_radio_info_t *radio)
 
     msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_SET_WIPHY);
     nla_put_u32(msg, NL80211_ATTR_IFINDEX, interface->index);
-    nl80211_fill_chandef(msg, radio, interface);
+    if (nl80211_fill_chandef(msg, radio, interface) == -1) {
+        return -1;
+    }
 
     if ((ret = send_and_recv(msg, wiphy_set_info_handler, &g_wifi_hal, NULL, NULL))) {
         wifi_hal_info_print("%s:%d: Error updating dev:%d error: %s\n",

@@ -505,7 +505,10 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
             wifi_hal_dbg_print("%s:%d:Switch channel on radio index:%d\n", __func__, __LINE__, index);
 
             update_hostap_config_params(radio);
-            nl80211_switch_channel(radio);
+            if (nl80211_switch_channel(radio) == -1) {
+                wifi_hal_error_print("%s:%d: Error switching channel\n", __func__, __LINE__);
+                goto reload_config;
+            }
             goto Exit;
         }
     }
