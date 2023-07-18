@@ -1896,6 +1896,16 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
     bridge = rtnl_link_get_by_name(link_cache, br_name);
     device = rtnl_link_get_by_name(link_cache, if_name);
 
+    if(bridge == NULL) {
+	wifi_hal_error_print("%s:%d:Link not found for bridge:%s\n", __func__, __LINE__, br_name);
+        return -1;
+    }
+
+    if(device == NULL) {
+	wifi_hal_error_print("%s:%d:Link not found for device:%s\n", __func__, __LINE__, if_name);
+        return -1;
+    }
+
     if (rtnl_link_enslave(sk, bridge, device)) {
         wifi_hal_error_print("%s:%d:Unable to enslave interface:%s to bridge:%s\n", __func__, __LINE__, if_name, br_name);
         nl_cache_free(link_cache);
