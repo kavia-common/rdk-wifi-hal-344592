@@ -15,8 +15,8 @@ INT wifi_hal_setRadioStatsEnable(   INT radioIndex,
 //--------------------------------------------------------------------------------------------------
 INT wifi_hal_getSSIDNumberOfEntries(ULONG *numEntries)
 {
-    wifi_interface_info_t *interface;
-    wifi_radio_info_t *radio;
+    wifi_interface_info_t *interface = NULL;
+    wifi_radio_info_t *radio = NULL;
     ULONG ssid_num = 0;
 
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
@@ -24,16 +24,17 @@ INT wifi_hal_getSSIDNumberOfEntries(ULONG *numEntries)
     // iterate through num radios over all interfaces
     for (int i = 0; i < g_wifi_hal.num_radios; i ++)
     {
-        radio = get_radio_by_rdk_index(i);
+      radio = get_radio_by_rdk_index(i);
+      if (radio) {
         interface = hash_map_get_first(radio->interface_map);
-
         while (interface != NULL)
         {
-            if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
-                ssid_num++;
-            }
-            interface = hash_map_get_next(radio->interface_map, interface);
+          if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+            ssid_num++;
+          }
+          interface = hash_map_get_next(radio->interface_map, interface);
         }
+      }
     }
     *numEntries = ssid_num;
 
@@ -123,11 +124,14 @@ INT wifi_hal_getApAssociatedDeviceRxStatsResult(INT radioIndex,
 INT wifi_hal_getSSIDEnable( INT ssidIndex,
                             BOOL *output_bool)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(ssidIndex);
-
+    if(!interface){
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, ssidIndex);
+      return RETURN_ERR;
+    }
     *output_bool = interface->vap_info.u.bss_info.enabled;
 
     return 0;
@@ -137,11 +141,14 @@ INT wifi_hal_getSSIDEnable( INT ssidIndex,
 INT wifi_hal_getSSIDRadioIndex( INT ssidIndex,
                                 INT *radioIndex)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(ssidIndex);
-
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, ssidIndex);
+      return RETURN_ERR;
+    }
     *radioIndex = interface->vap_info.radio_index;
 
     return 0;
@@ -151,11 +158,14 @@ INT wifi_hal_getSSIDRadioIndex( INT ssidIndex,
 INT wifi_hal_getSSIDNameStatus( INT apIndex,
                                 CHAR *output_string)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
-
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
     strcpy(output_string, interface->vap_info.u.bss_info.ssid);
 
     return 0;
@@ -178,10 +188,14 @@ INT wifi_hal_getApName( INT apIndex,
 INT wifi_hal_getNeighborReportActivation(   UINT apIndex,
                                             BOOL *activate)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
 
     *activate = interface->vap_info.u.bss_info.nbrReportActivated;
 
@@ -192,10 +206,14 @@ INT wifi_hal_getNeighborReportActivation(   UINT apIndex,
 INT wifi_hal_getBSSTransitionActivation(UINT apIndex,
                                         BOOL *activate)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
 
     *activate = interface->vap_info.u.bss_info.bssTransitionActivated;
 
@@ -218,10 +236,15 @@ INT wifi_hal_getApAssociatedClientDiagnosticResult( INT apIndex,
 INT wifi_hal_getRadioOperatingFrequencyBand(INT radioIndex,
                                             CHAR *output_string)
 {
-    wifi_radio_info_t *radio;
+    wifi_radio_info_t *radio = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     radio = get_radio_by_rdk_index(radioIndex);
+
+    if(!radio){
+      wifi_hal_error_print("%s:%d: radio pointer is NULL!.\n", __func__, __LINE__);
+      return RETURN_ERR;
+    }
 
     if (radio->oper_param.band == WIFI_FREQUENCY_5_BAND) {
         snprintf(output_string, 64, "5GHz");
@@ -290,10 +313,14 @@ INT wifi_hal_steering_clientRemove( UINT steeringgroupIndex,
                                     INT apIndex,
                                     mac_address_t client_mac)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
 
     return nl80211_kick_device(interface, client_mac);
 }
@@ -330,10 +357,14 @@ INT wifi_hal_setBTMRequest( UINT apIndex,
 INT wifi_hal_getSSIDName(   INT apIndex,
                             CHAR *output_string)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
 
     strcpy(output_string, interface->vap_info.u.bss_info.ssid);
 
@@ -361,11 +392,14 @@ INT wifi_hal_getAssociationReqIEs(  UINT apIndex,
 
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     struct sta_info *station = NULL;
 
     interface = get_interface_by_vap_index(apIndex);
-
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
     char* mac = (char*) &clientMacAddress[0];
 
     pthread_mutex_lock(&g_wifi_hal.hapd_lock);
@@ -410,10 +444,15 @@ INT wifi_hal_getRadioCountryCode(   INT radioIndex,
 INT wifi_hal_getRadioOperatingChannelBandwidth( INT radioIndex,
                                                 CHAR *output_string)
 {
-    wifi_radio_info_t *radio;
+    wifi_radio_info_t *radio = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     radio = get_radio_by_rdk_index(radioIndex);
+
+    if(!radio){
+      wifi_hal_error_print("%s:%d: radio pointer is NULL!.\n", __func__, __LINE__);
+      return RETURN_ERR;
+    }
 
     switch (radio->oper_param.channelWidth) {
         case WIFI_CHANNELBANDWIDTH_20MHZ:
@@ -468,11 +507,14 @@ INT wifi_hal_setNeighborReportActivation(UINT apIndex, BOOL activate)
 {
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
-
     interface = get_interface_by_vap_index(apIndex);
 
+    if(!interface) {
+      wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+      return RETURN_ERR;
+    }
     interface->vap_info.u.bss_info.nbrReportActivated = activate;
 
     return 0;
@@ -515,12 +557,11 @@ INT wifi_hal_getRadioIfName(INT radioIndex, CHAR *output_string)
 //--------------------------------------------------------------------------------------------------
 INT wifi_hal_getApNumDevicesAssociated(INT apIndex, ULONG *output_ulong)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
 
     wifi_hal_dbg_print("%s:%d: Enter.\n", __func__, __LINE__);
 
     interface = get_interface_by_vap_index(apIndex);
-
     if (!interface)
     {
         wifi_hal_error_print("%s:%d: ERROR Interface for vap index %d doesn't exist.\n", __func__, __LINE__, apIndex);
