@@ -1297,12 +1297,16 @@ INT wifi_hal_delApAclDevice(INT apIndex, CHAR *DeviceMacAddress)
 
 INT wifi_hal_delApAclDevices(INT apIndex)
 {
-    wifi_interface_info_t *interface;
+    wifi_interface_info_t *interface = NULL;
     wifi_vap_info_t *vap;
     acl_map_t *acl_map, *temp_acl_map;
     mac_addr_str_t mac_str;
 
     interface = get_interface_by_vap_index(apIndex);
+    if(!interface){
+        wifi_hal_error_print("%s:%d:interface for ap index:%d not found\n", __func__, __LINE__, apIndex);
+        return RETURN_ERR;
+    }
     vap = &interface->vap_info;
     wifi_hal_dbg_print("%s:%d: Interface: %s \n", __func__, __LINE__, interface->name);
     
