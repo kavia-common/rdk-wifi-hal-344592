@@ -443,11 +443,18 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
 
         while (interface != NULL) {
             if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+                wifi_hal_info_print("%s:%d: vap_index: %d interface name: %s vap_initialized: %d "
+                    "bss started: %d vap enabled: %d radio configured: %d radio enabled: %d\n",
+                    __func__, __LINE__, interface->vap_info.vap_index, interface->name,
+                    interface->vap_initialized, interface->bss_started,
+                    interface->vap_info.u.bss_info.enabled, radio->configured,
+                    radio->oper_param.enable);
                 if (radio->oper_param.enable && interface->vap_info.u.bss_info.enabled) {
                     nl80211_interface_enable(interface->name, true);
                     if (update_hostap_interface_params(interface) != RETURN_OK) {
                         return RETURN_ERR;
                     }
+                    interface->beacon_set = 0;
                     start_bss(interface);
                     interface->bss_started = true;
                 }
@@ -805,9 +812,15 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 return RETURN_ERR;
             }
 
+            wifi_hal_info_print("%s:%d: vap_index: %d interface name: %s vap_initialized: %d "
+                "bss started: %d vap enabled: %d radio configured: %d radio enabled: %d\n",
+                __func__, __LINE__, vap->vap_index, interface->name, interface->vap_initialized,
+                interface->bss_started, vap->u.bss_info.enabled, radio->configured,
+                radio->oper_param.enable);
             if (interface->vap_initialized == true) {
                 if (!(interface->bss_started)) {
                     if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                        interface->beacon_set = 0;
                         start_bss(interface);
                         interface->bss_started = true;
                     }
@@ -835,6 +848,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                     }
 
                     if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                        interface->beacon_set = 0;
                         start_bss(interface);
                         interface->bss_started = true;
                     }
@@ -849,6 +863,7 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                     return RETURN_ERR;
                 }
                 if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                    interface->beacon_set = 0;
                     start_bss(interface);
                     interface->bss_started = true;
                 }

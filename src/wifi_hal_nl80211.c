@@ -8429,7 +8429,7 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
 
     beacon_set = params->reenable ? 0 : interface->beacon_set;
 
-    wifi_hal_dbg_print("%s:%d:Enter, interface name:%s vap index:%d radio index:%d beascon_set %d\n", __func__, __LINE__,
+    wifi_hal_dbg_print("%s:%d:Enter, interface name:%s vap index:%d radio index:%d beacon_set %d\n", __func__, __LINE__,
         interface->name, vap->vap_index, radio->index, beacon_set);
 
     if (beacon_set) {
