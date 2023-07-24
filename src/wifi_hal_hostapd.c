@@ -1227,6 +1227,11 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     iface->conf->ht_capab = iface->current_mode->ht_capab;
     iface->conf->vht_capab = iface->current_mode->vht_capab;
 
+    iface->conf->vht_capab &= ~VHT_CAP_SUPP_CHAN_WIDTH_MASK;
+    if (param->channelWidth == WIFI_CHANNELBANDWIDTH_160MHZ) {
+        iface->conf->vht_capab |= VHT_CAP_SUPP_CHAN_WIDTH_160MHZ;
+    }
+
     /* By default, use the per-radio values */
     iface->extended_capa = radio->driver_data.extended_capa;
     iface->extended_capa_mask = radio->driver_data.extended_capa_mask;
