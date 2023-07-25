@@ -805,8 +805,12 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
             prepare_param_name(param_name, interface_name, "_bss_maxassoc");
             set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.bssMaxSta);
 
-            prepare_param_name(param_name, interface_name, "_ssid");
-            set_string_nvram_param(param_name, map->vap_array[index].u.bss_info.ssid);
+            if (strlen(map->vap_array[index].repurposed_vap_name) == 0) {
+                prepare_param_name(param_name, interface_name, "_ssid");
+                set_string_nvram_param(param_name, map->vap_array[index].u.bss_info.ssid);
+            } else {
+                wifi_hal_info_print("%s is repurposed to %s hence not setting in nvram \n",map->vap_array[index].vap_name,map->vap_array[index].repurposed_vap_name);
+            }
 
             memset(temp_buff, 0 ,sizeof(temp_buff));
             prepare_param_name(param_name, interface_name, "_wps_mode");
@@ -868,8 +872,13 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
                 prepare_param_name(param_name, interface_name, "_radius_das_port");
                 set_decimal_nvram_param(param_name, map->vap_array[index].u.bss_info.security.u.radius.dasport);
             } else {
-                prepare_param_name(param_name, interface_name, "_wpa_psk");
-                set_string_nvram_param(param_name, map->vap_array[index].u.bss_info.security.u.key.key);
+
+                if (strlen(map->vap_array[index].repurposed_vap_name) == 0) {
+                    prepare_param_name(param_name, interface_name, "_wpa_psk");
+                    set_string_nvram_param(param_name, map->vap_array[index].u.bss_info.security.u.key.key);
+                } else {
+                    wifi_hal_info_print("%s is repurposed to %s hence not setting in nvram \n",map->vap_array[index].vap_name,map->vap_array[index].repurposed_vap_name);
+                }
             }
 
             prepare_param_name(param_name, interface_name, "_hessid");

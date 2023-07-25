@@ -693,8 +693,12 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
           if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "encryption", temp_buff))
             wifi_hal_dbg_print("%s:%d: Failed to set the encryption type:%s for apIndex:%d\n", __func__, __LINE__,temp_buff,map->vap_array[index].vap_index);
         }
-        if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "ssid", map->vap_array[index].u.bss_info.ssid))
-          wifi_hal_dbg_print("%s:%d:Failed to set the SSID:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.ssid,map->vap_array[index].vap_index);
+        if  (strlen(map->vap_array[index].repurposed_vap_name) == 0) {
+            if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "ssid", map->vap_array[index].u.bss_info.ssid))
+                wifi_hal_dbg_print("%s:%d:Failed to set the SSID:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.ssid,map->vap_array[index].vap_index);
+        } else {
+            wifi_hal_info_print("%s is repurposed to %s hence not setting ssid in uci \n",map->vap_array[index].vap_name,map->vap_array[index].repurposed_vap_name);
+        }
         if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index,"wps_pin",map->vap_array[index].u.bss_info.wps.pin))
           wifi_hal_dbg_print("%s:%d: Failed to set the wps:%s for apIndex:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.wps.pin,map->vap_array[index].vap_index);
         if ((get_security_mode_support_radius(map->vap_array[index].u.bss_info.security.mode))|| is_wifi_hal_vap_hotspot_open(map->vap_array[index].vap_index))
@@ -720,8 +724,12 @@ int platform_create_vap(wifi_radio_index_t r_index, wifi_vap_info_map_t *map)
         }
         else
         {
-          if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "key", map->vap_array[index].u.bss_info.security.u.key.key))
-            wifi_hal_dbg_print("%s:%d: Failed to set the KeyPassPhrase:%s for index:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.key.key,map->vap_array[index].vap_index);
+            if  (strlen(map->vap_array[index].repurposed_vap_name) == 0) {
+                if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "key", map->vap_array[index].u.bss_info.security.u.key.key))
+                 wifi_hal_dbg_print("%s:%d: Failed to set the KeyPassPhrase:%s for index:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.security.u.key.key,map->vap_array[index].vap_index);
+             } else {
+                wifi_hal_info_print("%s is repurposed to %s hence not setting key in uci \n",map->vap_array[index].vap_name,map->vap_array[index].repurposed_vap_name);
+             }
         }
         if(uci_converter_set_str(TYPE_VAP, map->vap_array[index].vap_index, "hessid" ,map->vap_array[index].u.bss_info.interworking.interworking.hessid))
           wifi_hal_dbg_print("%s:%d: Failed to set the hessid:%s for index:%d\n", __func__, __LINE__,map->vap_array[index].u.bss_info.interworking.interworking.hessid,map->vap_array[index].vap_index);

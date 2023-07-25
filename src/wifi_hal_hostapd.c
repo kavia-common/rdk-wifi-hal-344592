@@ -825,7 +825,12 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     else {
          conf->radio_measurements[0] &= ~(WLAN_RRM_CAPS_NEIGHBOR_REPORT);
     }
-    // rdk_greylist
+    // connected_building_enabled
+    if (is_wifi_hal_vap_hotspot_from_interfacename(conf->iface)) {
+        conf->connected_building_avp = vap->u.bss_info.connected_building_enabled;
+        wifi_hal_info_print("%s:%d:connected_building_enabled is %d  and ifacename is %s\n", __func__, __LINE__,conf->connected_building_avp,conf->iface);
+    }
+   // rdk_greylist
     conf->rdk_greylist = vap->u.bss_info.network_initiated_greylist;
     if(conf->rdk_greylist) {
         wifi_hal_dbg_print("%s:%d:rdk_grey_list is %d  and ifacename is %s\n", __func__, __LINE__,conf->rdk_greylist,conf->iface);
@@ -833,6 +838,8 @@ int update_hostap_bss(wifi_interface_info_t *interface)
         wifi_hal_dbg_print(" %s:%d:vlan_id is %d  \n", __func__, __LINE__,vlan_id);
         conf->ap_vlan = vlan_id;
     }
+
+
 #if HOSTAPD_VERSION >= 210 
     int preassoc_min_mcs = convert_string_mcs_to_int(vap->u.bss_info.preassoc.minimum_advertised_mcs);
     conf->min_adv_mcs = preassoc_min_mcs;
