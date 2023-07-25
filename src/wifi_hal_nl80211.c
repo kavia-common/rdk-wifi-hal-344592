@@ -82,7 +82,7 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
         interface = hash_map_get_first(radio->interface_map);
 
         while (interface != NULL) {
-            if (interface->vap_configured == true) {
+            if (interface->vap_configured == true && interface->bridge_configured == true) {
                 vap = &interface->vap_info;
                 sock_fd = (vap->vap_mode == wifi_vap_mode_ap) ?
                                     interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd;
@@ -120,7 +120,7 @@ int get_biggest_in_fdset(wifi_hal_priv_t *priv)
         interface = hash_map_get_first(radio->interface_map);
 
         while (interface != NULL) {
-            if (interface->vap_configured == true) {
+            if (interface->vap_configured == true && interface->bridge_configured == true) {
                 vap = &interface->vap_info;
                 if (sock_fd < ((vap->vap_mode == wifi_vap_mode_ap) ?
                         interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd)) {
@@ -241,7 +241,7 @@ bool bridge_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
         vap = &interface->vap_info;
 
         while (interface != NULL) {
-            if ((interface->vap_configured == true) &&
+            if ((interface->vap_configured == true) && (interface->bridge_configured == true) &&
                     FD_ISSET(((vap->vap_mode == wifi_vap_mode_ap)?
                             interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd), &priv->drv_rfds)) {
                 found = true;
@@ -935,7 +935,7 @@ void recv_data_frame(wifi_interface_info_t *interface)
 {
     unsigned char buff[2048];
     struct sockaddr saddr;
-    int buflen, saddr_len;
+    int buflen, saddr_len, sock;
     struct ieee8023_hdr *eth_hdr;
     //wifi_direction_t dir;
     wifi_vap_info_t *vap;
@@ -948,11 +948,12 @@ void recv_data_frame(wifi_interface_info_t *interface)
     memset(buff, 0, sizeof(buff));
 
     //Receive a network packet and copy in to buffer
-    buflen = recvfrom((vap->vap_mode == wifi_vap_mode_ap) ? interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd,
-        buff, sizeof(buff), MSG_DONTWAIT, &saddr, (socklen_t *)&saddr_len);
+    sock = (vap->vap_mode == wifi_vap_mode_ap) ? interface->u.ap.br_sock_fd :
+        interface->u.sta.sta_sock_fd;
+    buflen = recvfrom(sock, buff, sizeof(buff), MSG_DONTWAIT, &saddr, (socklen_t *)&saddr_len);
     if (buflen < 0) {
-        wifi_hal_info_print("%s:%d: failed to receive packet, err: %d (%s)\n", __func__, __LINE__,
-            errno, strerror(errno));
+        wifi_hal_info_print("%s:%d: failed to receive packet on sock: %d interface: %s, "
+            "err: %d (%s)\n", __func__, __LINE__, sock, interface->name, errno, strerror(errno));
         return;
     }
 
@@ -1149,6 +1150,7 @@ void recv_link_status()
                                         wifi_hal_info_print("%s:%d: %s BRIDGE IS DELETED\n", __func__, __LINE__, interface->vap_info.bridge_name);
                                         close(interface->u.ap.br_sock_fd);
                                         interface->u.ap.br_sock_fd = 0;
+                                        interface->bridge_configured = false;
                                     }
                                     break;
                                 case RTM_NEWLINK:
@@ -1173,6 +1175,7 @@ void recv_link_status()
                                                 close(sock_fd);
                                             } else {
                                                 interface->u.ap.br_sock_fd = sock_fd;
+                                                interface->bridge_configured = true;
                                             }
                                         }
                                     }
@@ -7906,11 +7909,14 @@ int wifi_drv_if_remove(void *priv, enum wpa_driver_if_type type, const char *ifn
     if ((interface->vap_configured == true)) {
         if (vap->vap_mode == wifi_vap_mode_ap) {
             close(interface->u.ap.br_sock_fd);
+            interface->u.ap.br_sock_fd = 0;
         } else if (vap->vap_mode == wifi_vap_mode_sta) {
             close(interface->u.sta.sta_sock_fd);
+            interface->u.sta.sta_sock_fd = 0;
         }
 
         interface->vap_configured = false;
+        interface->bridge_configured = false;
     }
 
     wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
@@ -8829,6 +8835,7 @@ int wifi_drv_set_operstate(void *priv, int state)
         interface->u.sta.sta_sock_fd = sock_fd;
     }
 
+    interface->bridge_configured = true;
     interface->vap_configured = true;
     wifi_hal_info_print("%s:%d: Exit, interface:%s bridge:%s driver configured for 802.11\n",
             __func__, __LINE__, interface->name, vap->bridge_name);

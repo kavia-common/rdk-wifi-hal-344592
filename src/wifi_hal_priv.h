@@ -352,6 +352,7 @@ typedef struct {
    
     bool    vap_configured; // important flag, flag = true means that hostap is configured for this and 
                             // interface is ready to receive 802.11 data frames
+    bool    bridge_configured;
     struct nl_handle *nl_event;
     int nl_event_fd;
     struct nl_cb *nl_cb;
