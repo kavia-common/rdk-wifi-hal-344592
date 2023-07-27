@@ -389,6 +389,11 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
         return WIFI_HAL_INVALID_ARGUMENTS; // RDKB-47696: Passing invalid channel should return WIFI_HAL_INVALID_ARGUMENTS(-4)
     }
 
+    if (validate_radio_operation_param(operationParam) != RETURN_OK) {
+        wifi_hal_error_print("%s:%d:Failed to validate radio operation params for radio index: %d\n", __func__, __LINE__, index);
+        return WIFI_HAL_INVALID_ARGUMENTS;
+    }
+
     operationParam->op_class = op_class;
 
     wifi_hal_dbg_print("%s:%d:Index:%d Country: %d, Channel: %d, Op Class:%d\n",

@@ -701,6 +701,7 @@ int nl80211_disconnect_sta(wifi_interface_info_t *interface);
 int wifi_hal_purgeScanResult(unsigned int vap_index, unsigned char *sta_mac);
 void get_wifi_interface_info_map(wifi_interface_name_idex_map_t *interface_map);
 void get_radio_interface_info_map(radio_interface_mapping_t *radio_interface_map);
+int validate_radio_operation_param(wifi_radio_operationParam_t *param);
 int is_backhaul_interface(wifi_interface_info_t *interface);
 int get_interface_name_from_vap_index(unsigned int vap_index, char *interface_name);
 int get_ap_vlan_id(char *interface_name);

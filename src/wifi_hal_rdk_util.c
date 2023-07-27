@@ -259,3 +259,22 @@ int convert_string_mcs_to_int(char *string_mcs)
     }
     return val;
 }
+
+int validate_radio_operation_param(wifi_radio_operationParam_t *param)
+{
+    switch (param->channelWidth) {
+    case WIFI_CHANNELBANDWIDTH_20MHZ:
+    case WIFI_CHANNELBANDWIDTH_40MHZ:
+    case WIFI_CHANNELBANDWIDTH_80MHZ:
+    case WIFI_CHANNELBANDWIDTH_80_80MHZ:
+        break;
+    case WIFI_CHANNELBANDWIDTH_160MHZ:
+        if (param->DfsEnabled == true) {
+            return RETURN_ERR;
+        }
+        break;
+    default:
+        return RETURN_ERR;
+    }
+    return RETURN_OK;
+}
