@@ -466,7 +466,7 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
 #endif
 
 #ifdef CONFIG_IEEE80211W
-    conf->ieee80211w = sec->mfp;
+    conf->ieee80211w = (enum mfp_options)sec->mfp;
     switch (conf->ieee80211w) {
         case MGMT_FRAME_PROTECTION_OPTIONAL:
         case MGMT_FRAME_PROTECTION_REQUIRED:

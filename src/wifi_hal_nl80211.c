@@ -6008,7 +6008,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
         u16 csa_c_off_presp = settings->counter_offset_presp[i];
 
         if (settings->beacon_csa.tail_len <= csa_c_off_bcn) {
-            wifi_hal_error_print("%s:%d: beacon_csa.tail_len=%d csa_c_off_bcn=%d\n", __func__,
+            wifi_hal_error_print("%s:%d: beacon_csa.tail_len=%zu csa_c_off_bcn=%d\n", __func__,
                 __LINE__, settings->beacon_csa.tail_len, csa_c_off_bcn);
             return -1;
         }
@@ -6021,7 +6021,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
 
         if (settings->beacon_csa.probe_resp) {
             if (settings->beacon_csa.probe_resp_len <= csa_c_off_presp) {
-                wifi_hal_error_print("%s:%d: beacon_csa.probe_resp_len=%d csa_c_off_presp=%d\n",
+                wifi_hal_error_print("%s:%d: beacon_csa.probe_resp_len=%zu csa_c_off_presp=%d\n",
                     __func__, __LINE__, settings->beacon_csa.probe_resp_len, csa_c_off_presp);
                 return -1;
             }
