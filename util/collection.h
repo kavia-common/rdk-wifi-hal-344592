@@ -22,20 +22,29 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-typedef struct elem {
+
+#define HASH_MAP_MAX_KEY_SIZE   100
+
+typedef struct element_t {
     void     *data;
-    struct elem *next;    
+    struct element_t *next;    
 } element_t;
+
 typedef struct {
     void    *data;
     char    *key;
 } hash_element_t;
+
 typedef struct {
     element_t    *head;
+    uint32_t count;
 } queue_t;
+
 typedef struct {
     queue_t *queue;
+    element_t    *itr;
 } hash_map_t;
+
 // queue operations
 queue_t     *queue_create    (void);
 void        queue_destroy    (queue_t *q);
@@ -47,10 +56,12 @@ uint32_t     queue_count        (queue_t *q);
 // hash map operations, currently hash map is flat there are no buckets
 hash_map_t     *hash_map_create    (void);
 void         hash_map_destroy    (hash_map_t *map);
+void         hash_map_cleanup    (hash_map_t *map);
 int8_t         hash_map_put    (hash_map_t *map, char *key, void *data);
 void         *hash_map_get    (hash_map_t *map, const char *key);
 void        *hash_map_remove (hash_map_t *map, const char *key);
 uint32_t     hash_map_count    (hash_map_t *map);
+
 void     *hash_map_get_first    (hash_map_t *map);
 void     *hash_map_get_next    (hash_map_t *map, void *data);
 
