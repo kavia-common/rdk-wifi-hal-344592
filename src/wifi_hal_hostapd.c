@@ -445,7 +445,7 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             conf->wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
             conf->auth_algs = WPA_AUTH_ALG_SAE | WPA_AUTH_ALG_SHARED;
 #if HOSTAPD_VERSION >= 210 //2.10
-            conf->sae_pwe = 2;
+            conf->sae_pwe = 0;
 #endif
             break;
         default:
