@@ -1119,7 +1119,7 @@ INT wifi_hal_addApAclDevice(INT apIndex, mac_address_t DeviceMacAddress)
     }
 
     if (interface->acl_map == NULL) {
-        wifi_hal_dbg_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
+        wifi_hal_info_print("%s:%d: ACL map is NULL for ap index %d\n", __func__, __LINE__, apIndex);
         return RETURN_ERR;
     }
 
