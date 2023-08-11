@@ -246,6 +246,24 @@ int convert_string_to_int(int **int_list, char *val)
   return 0;
 }
 
+int get_min_rate(int *list, float *min_mbr_rate) {
+
+    int i = 0 , min_rate = 0;
+
+    if (list == NULL) {
+        return 0;
+    }
+
+    min_rate = list[0];
+
+    for (i = 0; list[i] >= 0; i++) {
+        if(min_rate > list[i]) {
+            min_rate=list[i];
+        }
+    }
+    *min_mbr_rate = (float)min_rate/10;
+    return 0;
+}
 
 int convert_string_mcs_to_int(char *string_mcs)
 {
