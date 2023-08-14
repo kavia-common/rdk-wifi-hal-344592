@@ -641,6 +641,9 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     struct sta_info *station = NULL;
     wifi_frame_t mgmt_frame;
     int sig_dbm = -100;
+#if  (defined(TCXB7_PORT) || defined(CMXB7_PORT) || defined(TCXB8_PORT))
+    int phy_rate = 60;
+#endif
 
     gnlh = nlmsg_data(nlmsg_hdr(msg));
     nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
@@ -698,7 +701,11 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
     if (tb[NL80211_ATTR_RX_SIGNAL_DBM]) {
         sig_dbm = nla_get_u32(tb[NL80211_ATTR_RX_SIGNAL_DBM]);
     }
-
+#if  (defined(TCXB7_PORT) || defined(CMXB7_PORT) || defined(TCXB8_PORT))
+    if (tb[NL80211_ATTR_RX_PHY_RATE_INFO]) {
+        phy_rate = nla_get_u32(tb[NL80211_ATTR_RX_PHY_RATE_INFO]);
+    }
+#endif
     if (memcmp(mgmt->da, interface->mac, sizeof(mac_address_t)) == 0) {
         memcpy(sta, mgmt->sa, sizeof(mac_address_t));
         dir = wifi_direction_uplink;
@@ -719,6 +726,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         }
         return NL_SKIP;
     }
+
 
     fc = le_to_host16(mgmt->frame_control);
     stype = WLAN_FC_GET_STYPE(fc);
@@ -763,8 +771,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
 
     case WLAN_FC_STYPE_PROBE_REQ:
         mgmt_type = WIFI_MGMT_FRAME_TYPE_PROBE_REQ;
-        //wifi_hal_dbg_print("%s:%d: Received probe req frame from: %s\n", __func__, __LINE__,
-        //to_mac_str(sta, sta_mac_str));
+        //wifi_hal_dbg_print("%s:%d: Received probe req frame on interface:%s from the sta : %s and the phy_rate:%d\n", __func__, __LINE__,interface->name,to_mac_str(sta, sta_mac_str),phy_rate);
 
         if (callbacks->steering_event_callback != 0 &&
             is_probe_req_to_our_ssid(mgmt, len, interface)) {
@@ -903,7 +910,7 @@ int process_mgmt_frame(struct nl_msg *msg, void *arg)
         callbacks->mgmt_frame_rx_callback(vap->vap_index, &mgmt_frame);
 #else
 #if defined(RDK_ONEWIFI) && (defined(TCXB7_PORT) || defined(CMXB7_PORT) || defined(TCXB8_PORT))
-        callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir, sig_dbm);
+        callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir, sig_dbm, phy_rate);
 #else
         callbacks->mgmt_frame_rx_callback(vap->vap_index, sta, (unsigned char *)mgmt, len, mgmt_type, dir);
 #endif
