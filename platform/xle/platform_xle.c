@@ -216,7 +216,18 @@ int platform_wps_event(wifi_wps_event_t data)
 
 int platform_get_country_code_default(char *code)
 {
-    return 0;
+	char value[BUFFER_LENGTH_WIFIDB] = {0};
+        FILE *fp = NULL;
+        fp = popen("grep \"REGION=\" /tmp/serial.txt | cut -d '=' -f 2 | tr -d '\r\n'","r");
+        if (fp != NULL) {
+        while(fgets(value, sizeof(value), fp) != NULL) {
+                strncpy(code, value, strlen(value));
+        }
+        pclose(fp);
+        return 0;
+        }
+        return -1;
+
 }
 
 int nvram_get_current_password(char *l_password, int vap_index)
