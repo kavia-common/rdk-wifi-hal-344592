@@ -149,9 +149,7 @@ wifi_interface_name_idex_map_t interface_index_map[] = {
     {2, 2,  "wl2.1",   "brlan0",   100,   16,     "private_ssid_6g"},
     {2, 2,  "wl2.2",   "brlan1",   101,   17,     "iot_ssid_6g"},
     {2, 2,  "wl2.3",   "bropen6g", 2253,  18,     "hotspot_open_6g"},
-#if 0
-    {2, 2,  "wl2.4",   "brlan6",   106,   19,     "lnf_psk_6g"},
-#endif
+    {2, 2,  "wl2.4",   "br106",    106,   19,     "lnf_psk_6g"},
     {2, 2,  "wl2.5",   "brsecure6g",2256, 20,     "hotspot_secure_6g"},
 #if 0
     {2, 2,  "wl2.6",   "br106",    106,   21,     "lnf_radius_6g"},
