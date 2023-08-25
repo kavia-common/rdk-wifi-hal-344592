@@ -62,7 +62,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
     callbacks = get_hal_device_callbacks();
 
     if ((frame = tb[NL80211_ATTR_FRAME]) == NULL) {
-        wifi_hal_error_print("%s:%d: frame attribute not present\n", __func__, __LINE__);
+        wifi_hal_dbg_print("%s:%d: frame attribute not present\n", __func__, __LINE__);
         return;
     }
 
@@ -72,11 +72,11 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
     }
 
     if ((cookie = tb[NL80211_ATTR_COOKIE]) == NULL) {
-        wifi_hal_info_print("%s:%d: cookie attribute not present\n", __func__, __LINE__);
+        wifi_hal_dbg_print("%s:%d: cookie attribute not present\n", __func__, __LINE__);
     }
 
     if ((ack = tb[NL80211_ATTR_ACK]) == NULL) {
-        wifi_hal_info_print("%s:%d: ack attribute not present\n", __func__, __LINE__);
+        wifi_hal_dbg_print("%s:%d: ack attribute not present\n", __func__, __LINE__);
     }
 
     if (tb[NL80211_ATTR_RX_SIGNAL_DBM]) {
@@ -96,7 +96,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
         memcpy(sta, hdr->addr2, sizeof(mac_address_t));
         dir = wifi_direction_uplink;
     } else {
-        wifi_hal_error_print("%s:%d: unknown interface... dropping\n", __func__, __LINE__);
+        wifi_hal_dbg_print("%s:%d: unknown interface... dropping\n", __func__, __LINE__);
         return;
     }
 
