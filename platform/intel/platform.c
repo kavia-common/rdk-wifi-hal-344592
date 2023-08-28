@@ -1020,7 +1020,7 @@ INT wifi_getApEnable(INT apIndex, BOOL *output_bool)
 //--------------------------------------------------------------------------------------------------
 INT wifi_setApMacAddressControlMode(INT apIndex, INT filterMode)
 {
-    return RETURN_ERR;
+    return RETURN_OK;
 }
 
 //--------------------------------------------------------------------------------------------------

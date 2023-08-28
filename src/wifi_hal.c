@@ -1009,12 +1009,35 @@ INT wifi_hal_kickAssociatedDevice(INT ap_index, mac_address_t mac)
         wifi_hal_error_print("%s:%d: NULL Interface pointer \n", __func__, __LINE__);
         return RETURN_ERR;
     }
-
-    if (nl80211_kick_device(interface, mac) != 0) {
-        wifi_hal_error_print("%s:%d: nl80211_kick_device failed for device %02x:....%02x\n", __func__, __LINE__, mac[0], mac[5]);
+    u8 own_addr[ETH_ALEN];
+    mac_address_t bcastmac= {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    pthread_mutex_lock(&g_wifi_hal.hapd_lock);
+    struct hostapd_data *hapd = &interface->u.ap.hapd;
+    if(hapd == NULL) {
+        wifi_hal_error_print("%s:%d: NULL hapd pointer \n", __func__, __LINE__);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
         return RETURN_ERR;
     }
-
+    if(hapd->sta_list == NULL) {
+        wifi_hal_error_print("%s:%d: hapd->sta_list is NULL \n", __func__, __LINE__);
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+        return RETURN_ERR;
+    }
+    struct sta_info *tmp = NULL;
+    memcpy(own_addr, hapd->own_addr, ETH_ALEN);
+    if (memcmp(mac, bcastmac, sizeof(mac_address_t)) == 0) {
+        tmp = hapd->sta_list;
+        while(tmp) {
+            wifi_drv_sta_disassoc(interface, own_addr,tmp->addr,WLAN_REASON_UNSPECIFIED);
+            tmp=tmp->next;
+        }
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+    }
+    else {
+        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+        wifi_hal_info_print("%s:%d:mac is not a broadcast mac address\n", __func__, __LINE__);
+        wifi_drv_sta_disassoc(interface, own_addr,mac,WLAN_REASON_UNSPECIFIED);
+    }
     return RETURN_OK;
 }
 
