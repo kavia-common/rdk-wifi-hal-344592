@@ -735,39 +735,52 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
     RADIO_INDEX_ASSERT(index);
     NULL_PTR_ASSERT(map);
 
-    wifi_hal_dbg_print("%s:%d: before get_radio_by_index:%d\r\n",__func__, __LINE__, index);
     radio = get_radio_by_rdk_index(index);
     if (radio == NULL) {
-        wifi_hal_error_print("%s:%d:Could not find radio index:%d\n", __func__, __LINE__, index);
+        wifi_hal_error_print("%s:%d: radio index:%d failed not find radio\n", __func__, __LINE__,
+            index);
         return RETURN_ERR;
     }
 
     if (false == radio->radio_presence) {
-       wifi_hal_error_print("%s:%d: Skip the Radio %d .This is sleeping in ECO mode \n", __func__, __LINE__, radio->index);
+       wifi_hal_info_print("%s:%d: radio index:%d skip vap create due to ECO mode\n", __func__,
+           __LINE__, radio->index);
        return RETURN_OK;
     }
 
     if ((pre_set_vap_params_fn = get_platform_pre_create_vap_fn()) != NULL) {
-        wifi_hal_info_print("%s:%d: set vap params to nvram\n", __func__, __LINE__);
+        wifi_hal_info_print("%s:%d: radio index:%d pre-create vap\n", __func__, __LINE__,
+            radio->index);
         pre_set_vap_params_fn(index, map);
     }
 
     // now create vaps on the interfaces
     for (i = 0; i < map->num_vaps; i++) {
         vap = &map->vap_array[i];
-        interface = get_interface_by_vap_index(vap->vap_index);
 
-        wifi_hal_dbg_print("%s:%d:vap_index:%d\r\n",__func__, __LINE__, vap->vap_index);
-        wifi_hal_dbg_print("%s:%d: vap_index:%d name:%s basic_transmit_rates:%s, oper_transmit_rates:%s, supp_transmit_rates:%s min_adv_mcs:%s 6GOpInfoMinRate:%s\n",__func__, __LINE__, vap->vap_index, interface->name,vap->u.bss_info.preassoc.basic_data_transmit_rates,vap->u.bss_info.preassoc.operational_data_transmit_rates,vap->u.bss_info.preassoc.supported_data_transmit_rates,vap->u.bss_info.preassoc.minimum_advertised_mcs,vap->u.bss_info.preassoc.sixGOpInfoMinRate);
+        wifi_hal_info_print("%s:%d: vap index:%d create vap\n", __func__, __LINE__,
+            vap->vap_index);
+
+        interface = get_interface_by_vap_index(vap->vap_index);
         if (interface == NULL) {
-            wifi_hal_info_print("%s:%d:Could not find vap index:%d on radio:%d\n", __func__, __LINE__, vap->vap_index, index);
-            
+            wifi_hal_info_print("%s:%d: vap index:%d create interface\n", __func__, __LINE__,
+                vap->vap_index);
             if ((nl80211_create_interface(radio, vap, &interface) != 0) || (interface == NULL)) {
-                wifi_hal_error_print("%s:%d: Could not create interface index:%d on radio:%s\n", __func__, __LINE__,
-                    vap->vap_index, radio->name);
+                wifi_hal_error_print("%s:%d: vap index:%d failed to create interface\n", __func__,
+                    __LINE__, vap->vap_index);
                 continue;
             }
         }
+
+        wifi_hal_dbg_print("%s:%d: vap index:%d interface:%s basic_transmit_rates:%s, "
+            "oper_transmit_rates:%s, supp_transmit_rates:%s min_adv_mcs:%s "
+            "6GOpInfoMinRate:%s\n", __func__, __LINE__, vap->vap_index, interface->name,
+            vap->u.bss_info.preassoc.basic_data_transmit_rates,
+            vap->u.bss_info.preassoc.operational_data_transmit_rates,
+            vap->u.bss_info.preassoc.supported_data_transmit_rates,
+            vap->u.bss_info.preassoc.minimum_advertised_mcs,
+            vap->u.bss_info.preassoc.sixGOpInfoMinRate);
+
 #ifdef CMXB7_PORT
         if ((vap->u.bss_info.enabled == 1) &&
             ((vap->u.bss_info.mac_filter_enable == TRUE) ||
@@ -776,51 +789,79 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         }
 #endif
 
-        wifi_hal_info_print("%s:%d: vap_index:%d name:%s\r\n",__func__, __LINE__, vap->vap_index, interface->name);
-
+        wifi_hal_info_print("%s:%d: vap index:%d interface:%s mode:%d\n", __func__, __LINE__,
+            vap->vap_index, interface->name, vap->vap_mode);
         if (vap->vap_mode == wifi_vap_mode_ap) {
             memcpy(vap->u.bss_info.bssid, interface->mac, sizeof(vap->u.bss_info.bssid));
         } else {
             memcpy(vap->u.sta_info.mac, interface->mac, sizeof(vap->u.sta_info.mac));
         }
         memcpy((unsigned char *)&interface->vap_info, (unsigned char *)vap, sizeof(wifi_vap_info_t));
+
+        wifi_hal_info_print("%s:%d: interface:%s set down\n", __func__, __LINE__, interface->name);
         nl80211_interface_enable(interface->name, false);
 
         if (vap->vap_mode == wifi_vap_mode_sta) {
+            wifi_hal_info_print("%s:%d: interface:%s remove from bridge\n", __func__, __LINE__,
+                interface->name);
             nl80211_remove_from_bridge(interface->name);
         }
 
+        wifi_hal_info_print("%s:%d: interface:%s set mode:%d\n", __func__, __LINE__,
+            interface->name, vap->vap_mode);
         if (nl80211_update_interface(interface) != 0) {
-            wifi_hal_error_print("%s:%d:Failed to update interface:%s\r\n",__func__, __LINE__, interface->name);
+            wifi_hal_error_print("%s:%d: interface:%s failed to set mode %d\n",__func__, __LINE__,
+                interface->name, vap->vap_mode);
             return RETURN_ERR;
         }
 
+        wifi_hal_info_print("%s:%d: interface:%s radio configured:%d radio enabled:%d\n",
+            __func__, __LINE__, interface->name, radio->configured, radio->oper_param.enable);
         if (radio->configured && radio->oper_param.enable) {
+            wifi_hal_info_print("%s:%d: interface:%s set up\n", __func__, __LINE__,
+                interface->name);
             nl80211_interface_enable(interface->name, true);
         }
 
         if (vap->vap_mode == wifi_vap_mode_ap) {
             // create the bridge
+            wifi_hal_info_print("%s:%d: interface:%s bss enabled:%d bridge:%s\n", __func__,
+                __LINE__, interface->name, vap->u.bss_info.enabled, vap->bridge_name);
             if (vap->bridge_name[0] != '\0' && vap->u.bss_info.enabled) {
-                if ((nl80211_create_bridge(interface->name, vap->bridge_name) != 0) ||
-                        (nl80211_interface_enable(vap->bridge_name, true) != 0)) {
-                    wifi_hal_info_print("Failed to bounce interface and create bridge\n");
+                wifi_hal_info_print("%s:%d: interface:%s create bridge:%s\n", __func__, __LINE__,
+                    interface->name, vap->bridge_name);
+                if (nl80211_create_bridge(interface->name, vap->bridge_name) != 0) {
+                    wifi_hal_error_print("%s:%d: interface:%s failed to create bridge:%s\n",
+                        __func__, __LINE__, interface->name, vap->bridge_name);
+                    continue;
+                }
+
+                wifi_hal_info_print("%s:%d: interface:%s set bridge %s up\n", __func__, __LINE__,
+                    interface->name, vap->bridge_name);
+                if (nl80211_interface_enable(vap->bridge_name, true) != 0) {
+                    wifi_hal_error_print("%s:%d: interface:%s failed to set bridge %s up\n",
+                        __func__, __LINE__, interface->name, vap->bridge_name);
                     continue;
                 }
             }
 
+            wifi_hal_info_print("%s:%d: interface:%s update hostapd params\n", __func__, __LINE__,
+                interface->name);
             if (update_hostap_interface_params(interface) != RETURN_OK) {
+                wifi_hal_error_print("%s:%d: interface:%s failed to update hostapd params\n",
+                    __func__, __LINE__, interface->name);
                 return RETURN_ERR;
             }
 
-            wifi_hal_info_print("%s:%d: vap_index: %d interface name: %s vap_initialized: %d "
-                "bss started: %d vap enabled: %d radio configured: %d radio enabled: %d\n",
-                __func__, __LINE__, vap->vap_index, interface->name, interface->vap_initialized,
-                interface->bss_started, vap->u.bss_info.enabled, radio->configured,
-                radio->oper_param.enable);
+            wifi_hal_info_print("%s:%d: interface:%s vap_initialized:%d\n", __func__, __LINE__,
+                interface->name, interface->vap_initialized);
             if (interface->vap_initialized == true) {
+                wifi_hal_info_print("%s:%d: interface:%s bss_started:%d\n", __func__, __LINE__,
+                    interface->name, interface->bss_started);
                 if (!(interface->bss_started)) {
                     if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                        wifi_hal_info_print("%s:%d: interface:%s enable ap\n", __func__,
+                            __LINE__, interface->name);
                         interface->beacon_set = 0;
                         start_bss(interface);
                         interface->bss_started = true;
@@ -828,6 +869,8 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 } else {
                     // reload vaps config
                     interface->beacon_set = 0;
+                    wifi_hal_info_print("%s:%d: interface:%s reload hostapd config\n", __func__,
+                        __LINE__, interface->name);
                     pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_reload_config(interface->u.ap.hapd.iface);
 #ifdef CONFIG_SAE
@@ -836,7 +879,13 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                     }
 #endif
                     pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
+
+                    wifi_hal_info_print("%s:%d: interface:%s disable ap\n", __func__, __LINE__,
+                        interface->name);
                     nl80211_enable_ap(interface, false);
+
+                    wifi_hal_info_print("%s:%d: interface:%s free hostapd data\n", __func__,
+                        __LINE__, interface->name);
                     pthread_mutex_lock(&g_wifi_hal.hapd_lock);
                     hostapd_bss_deinit_no_free(&interface->u.ap.hapd);
                     hostapd_free_hapd_data(&interface->u.ap.hapd);
@@ -844,11 +893,17 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                         hostapd_config_clear_wpa_psk(&interface->u.ap.hapd.conf->ssid.wpa_psk);
                     pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
 
+                    wifi_hal_info_print("%s:%d: interface:%s update hostapd params\n", __func__,
+                        __LINE__, interface->name);
                     if (update_hostap_interface_params(interface) != RETURN_OK) {
+                        wifi_hal_error_print("%s:%d: interface:%s failed to update hostapd "
+                            "params\n", __func__, __LINE__, interface->name);
                         return RETURN_ERR;
                     }
 
                     if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                        wifi_hal_info_print("%s:%d: interface:%s enable ap\n", __func__,
+                            __LINE__, interface->name);
                         interface->beacon_set = 0;
                         start_bss(interface);
                         interface->bss_started = true;
@@ -859,17 +914,24 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 }
             } else {
                 interface->vap_initialized = true;
+                wifi_hal_info_print("%s:%d: radio index:%d update hostapd interfaces\n", __func__,
+                    __LINE__, radio->index);
                 if (update_hostap_interfaces(radio)!= RETURN_OK) {
-                    wifi_hal_error_print("%s:%d:Failed to update hostap interface:%s\r\n",__func__, __LINE__, radio->name);
+                    wifi_hal_error_print("%s:%d: radio index:%d failed to update hostapd "
+                        "interfaces\n", __func__, __LINE__, radio->index);
                     return RETURN_ERR;
                 }
                 if (vap->u.bss_info.enabled && radio->configured && radio->oper_param.enable) {
+                    wifi_hal_info_print("%s:%d: interface:%s enable ap\n", __func__,
+                        __LINE__, interface->name);
                     interface->beacon_set = 0;
                     start_bss(interface);
                     interface->bss_started = true;
                 }
             }
             if (radio->configured && radio->oper_param.enable) {
+                wifi_hal_info_print("%s:%d: interface:%s set %s\n", __func__, __LINE__,
+                    interface->name, vap->u.bss_info.enabled ? "up" : "down");
                 nl80211_interface_enable(interface->name, vap->u.bss_info.enabled);
             }
 
@@ -881,8 +943,12 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             //nl80211_start_scan(interface);
             interface->vap_initialized = true;
             if (radio->configured && radio->oper_param.enable) {
+                wifi_hal_info_print("%s:%d: interface:%s set operstate 1\n", __func__,
+                    __LINE__, interface->name);
                 wifi_drv_set_operstate(interface, 1);
             } else {
+                wifi_hal_info_print("%s:%d: interface:%s set down\n", __func__, __LINE__,
+                    interface->name);
                 nl80211_interface_enable(interface->name, false);
             }
         }
@@ -905,27 +971,29 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 //disabled
                 filtermode  = 0;
             }
-
+            wifi_hal_info_print("%s:%d: vap index:%d set mac filter mode:%d\n", __func__, __LINE__,
+                vap->vap_index, filtermode);
             if (wifi_setApMacAddressControlMode(vap->vap_index, filtermode) < 0) {
-                wifi_hal_error_print("%s:%d: wifi_setApMacAddressControlMode apIndex %d failed\n",
-                                         __func__, __LINE__, vap->vap_index);
+                wifi_hal_error_print("%s:%d: vap index:%d failed to set mac filter\n", __func__,
+                    __LINE__, vap->vap_index);
                 return RETURN_ERR;
             }
-            wifi_hal_info_print("mac filter mode:%d apIndex:%d\n", filtermode, vap->vap_index);
-
         }
 #endif
         if (vap->vap_mode == wifi_vap_mode_ap) {
-            if (wifi_setApManagementFramePowerControl(vap->vap_index, vap->u.bss_info.mgmtPowerControl) == RETURN_OK) {
-                wifi_hal_dbg_print("%s:%d:ManagementFrame Power control set for AP index %d successful \n", __func__, __LINE__, vap->vap_index);
-            } else {
-                wifi_hal_error_print("%s:%d:ManagementFrame Power control set failed for AP index %d\n", __func__, __LINE__, vap->vap_index);
+            wifi_hal_info_print("%s:%d: vap index:%d set power:%d\n",  __func__, __LINE__,
+                vap->vap_index, vap->u.bss_info.mgmtPowerControl);
+            if (wifi_setApManagementFramePowerControl(vap->vap_index,
+                vap->u.bss_info.mgmtPowerControl) != RETURN_OK) {
+                wifi_hal_error_print("%s:%d: vap index:%d failed to set power %d\n", __func__,
+                    __LINE__, vap->vap_index, vap->u.bss_info.mgmtPowerControl);
             }
         }
     }
 
     if ((set_vap_params_fn = get_platform_create_vap_fn()) != NULL) {
-        wifi_hal_info_print("%s:%d: set vap params to nvram\n", __func__, __LINE__);
+        wifi_hal_info_print("%s:%d: radio index:%d post-create vap\n", __func__, __LINE__,
+            radio->index);
         set_vap_params_fn(index, map);
     }
     

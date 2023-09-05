@@ -1857,6 +1857,9 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
     bool is_hotspot_interface = false;
     is_hotspot_interface = is_wifi_hal_vap_hotspot_from_interfacename(if_name);
 
+    wifi_hal_info_print("%s:%d: bridge:%s interface:%s is hotspot:%d\n", __func__, __LINE__,
+        br_name, if_name, is_hotspot_interface);
+
     if (access(OVS_MODULE, F_OK) == 0 && !is_hotspot_interface) {
         if (ovs_if_get_br(ovs_brname, if_name) == 0) {
             if (strcmp(br_name, ovs_brname) != 0) {
@@ -1887,41 +1890,55 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
 
     sk = nl_socket_alloc();
 
+    // verbose logging for bridge configuration debug
+    wifi_hal_info_print("%s:%d: bridge:%s nl connect\n", __func__, __LINE__, br_name);
+
     if (nl_connect(sk, NETLINK_ROUTE)) {
         wifi_hal_error_print("Unable to connect socket");
         nl_socket_free(sk);
         return -1;
     }
 
+    wifi_hal_info_print("%s:%d: bridge:%s nl add\n", __func__, __LINE__, br_name);
     rtnl_link_bridge_add(sk, br_name);
 
+    wifi_hal_info_print("%s:%d: bridge:%s alloc cache\n", __func__, __LINE__, br_name);
     if (rtnl_link_alloc_cache(sk, AF_UNSPEC, &link_cache)) {
-        wifi_hal_error_print("Unable to allocate cache");
+        wifi_hal_error_print("%s:%d bridge:%s failed to allocate cache\n",  __func__, __LINE__,
+            br_name);
         nl_socket_free(sk);
         return -1;
     }
 
+    wifi_hal_info_print("%s:%d: bridge:%s cache refill\n", __func__, __LINE__, br_name);
     nl_cache_refill(sk, link_cache);
 
+    wifi_hal_info_print("%s:%d: bridge:%s get link\n", __func__, __LINE__, br_name);
     bridge = rtnl_link_get_by_name(link_cache, br_name);
     device = rtnl_link_get_by_name(link_cache, if_name);
 
     if(bridge == NULL) {
-	wifi_hal_error_print("%s:%d:Link not found for bridge:%s\n", __func__, __LINE__, br_name);
+	wifi_hal_error_print("%s:%d: bridge:%s failed to get link\n", __func__, __LINE__, br_name);
         return -1;
     }
 
     if(device == NULL) {
-	wifi_hal_error_print("%s:%d:Link not found for device:%s\n", __func__, __LINE__, if_name);
+	wifi_hal_error_print("%s:%d: bridge:%s failed to get link for device:%s\n", __func__,
+            __LINE__, br_name, if_name);
         return -1;
     }
 
+    wifi_hal_info_print("%s:%d: bridge:%s enslave device %s\n", __func__, __LINE__, br_name,
+        if_name);
     if (rtnl_link_enslave(sk, bridge, device)) {
-        wifi_hal_error_print("%s:%d:Unable to enslave interface:%s to bridge:%s\n", __func__, __LINE__, if_name, br_name);
+        wifi_hal_info_print("%s:%d: bridge:%s failed to enslave device %s\n", __func__, __LINE__,
+            br_name, if_name);
         nl_cache_free(link_cache);
         nl_socket_free(sk);
         return -1;
     }
+
+    wifi_hal_info_print("%s:%d: bridge:%s nl free\n", __func__, __LINE__, br_name);
 
     rtnl_link_put(bridge);
     rtnl_link_put(device);
