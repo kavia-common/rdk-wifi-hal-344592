@@ -287,7 +287,7 @@ int validate_radio_operation_param(wifi_radio_operationParam_t *param)
     case WIFI_CHANNELBANDWIDTH_80_80MHZ:
         break;
     case WIFI_CHANNELBANDWIDTH_160MHZ:
-        if (param->DfsEnabled == true) {
+        if (param->DfsEnabled == false) {
             return RETURN_ERR;
         }
         break;
